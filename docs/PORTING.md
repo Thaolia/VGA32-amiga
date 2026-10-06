@@ -94,5 +94,7 @@ n'enregistre pas les touches au boot, l'émettre en premier (dans `kbd_amiga.cpp
 `src/hal/audio_dac.cpp` : `WaveformGenerator` custom dont `getSample()` dépile le ring Paula
 (`paula_ring_pop`, 44100 Hz stéréo 16 b), downmix mono 8 bits, attaché à `fabgl::SoundGenerator`
 (DAC GPIO25, I2S0 — indépendant de l'I2S1 de la VGA). **Ordre critique** : démarré depuis `emu_task`
-APRÈS `paula_reset` (le ring doit exister). Mono 8 bits = qualité modeste ; niveau = décalage `>> 9`
-dans `getSample` (tunable).
+APRÈS `paula_reset` (le ring doit exister). Fréquence **44100 Hz** = celle du ring (pas de
+ré-échantillonnage). Mono 8 bits = qualité modeste ; niveau = décalage `>> 9` dans `getSample`
+(tunable). ⚠ Non testé sur matériel : si le son est muet/haché, le DAC interne tourne souvent
+mieux plus bas — repli `SoundGenerator(16000, …)` + décimation du ring (~2,75:1).

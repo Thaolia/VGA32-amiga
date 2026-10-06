@@ -115,6 +115,11 @@ void input_ps2_init(void)
 {
     /* clavier port 0 (GPIO33/32) + souris port 1 (GPIO26/27) */
     fabgl::PS2Controller::begin(fabgl::PS2Preset::KeyboardPort0_MousePort1);
+    /* la table vk_to_amiga est POSITIONNELLE (US) : on force le layout US pour
+     * que chaque touche physique resolve a la bonne VirtualKey (defaut FabGL = US,
+     * explicite ici pour lever toute ambiguite). */
+    fabgl::Keyboard *k = fabgl::PS2Controller::keyboard();
+    if (k) k->setLayout(&fabgl::USLayout);
 }
 
 void input_ps2_poll(void)
