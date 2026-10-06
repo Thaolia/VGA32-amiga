@@ -62,7 +62,19 @@ ESP32). C'est la taxe inhérente à Musashi sur ESP32 et le cœur du risque perf
   16 couleurs — l'EHB 64 c. devient faux).
 - **Image pas centrée** : ajuster `VGA32_VSTART` dans `platform_esp32.h`.
 - **Écran ne tient pas le timing** : modeline custom 320×256, ou repli `VGA_640x240_60Hz` crop.
-- **Silicium rev1** : ajouter `-mfix-esp32-psram-cache-issue` dans `platformio.ini` (coût débit).
+- **Silicium rev1** : `-mfix-esp32-psram-cache-issue` est actif (carte de référence = rev v1.1).
+  Sur une carte rev3, le retirer pour récupérer du débit PSRAM.
+
+## Mesures Phase 0 (carte de référence, 2026-10-06)
+
+ESP32-PICO-D4 rev v1.1, flash 4 Mo (partitions `huge_app.csv` du framework : app 3 Mo), fix
+PSRAM actif. Boot Kickstart 1.3 jusqu'à la demande de disquette (ADF embarqué vierge, pas de SD) :
+**14,6 à 21,1 fps** (trames 50-200), **heap interne libre ~170 Ko**, PSRAM libre 1,1 Mo après
+allocations, `[RESET]` OK. Critères chiffrés GO atteints (≥ 10 fps, ≥ 40 Ko).
+
+Avec l'ADF Workbench 1.3.2 embarqué (350 Ko compressé, firmware 1,24 Mo / 3 Mo) : boot disquette
+(129 lectures de pistes en 90 s), **12 à 25 fps pendant les accès disque, ~38 fps au repos**,
+heap interne stable à 169,6 Ko. Aspect du bureau et stabilité VGA : à confirmer sur le moniteur.
 
 ## Chargement ADF depuis la carte SD (implémenté — Phase 1)
 

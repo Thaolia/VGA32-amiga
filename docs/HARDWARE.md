@@ -2,7 +2,9 @@
 
 ## Carte
 
-- **SoC** : ESP32 classique (dual-core LX6 @240 MHz), module **WROVER avec PSRAM** (v1.4).
+- **SoC** : ESP32 classique (dual-core LX6 @240 MHz) + PSRAM (v1.4). Carte de référence mesurée
+  (esptool) : **ESP32-PICO-D4, rev v1.1, flash 4 Mo** (pas un WROVER 16 Mo) ; pont USB-série
+  **CH9102** (1a86:55d4, `/dev/ttyACM0` sous Linux) — d'autres lots ont un CP2104.
   La PSRAM est **obligatoire** (l'émulateur alloue ~2,4 Mo). Les révisions sans PSRAM (v1.2,
   WROOM) ne conviennent pas.
 - **PSRAM** : QSPI (quad) — ~4 Mo adressables. Bande passante nettement inférieure à l'OPI octal
@@ -26,7 +28,7 @@
 | LED embarquée | 2 | **partagée avec SD-MISO** |
 | USB-série (CP2104) | 1 / 3 | TX0 / RX0 |
 | Flash interne | 6-11 | inutilisables |
-| PSRAM (IPS6404, interne WROVER) | 16 / 17 | réservés |
+| PSRAM (IPS6404) | 16 / 17 | réservés |
 
 Comme ces broches correspondent aux valeurs par défaut de FabGL, le code appelle
 `VGAController::begin()` **sans argument** et `PS2Controller::begin(PS2Preset::KeyboardPort0_MousePort1)`.
@@ -76,5 +78,5 @@ Un condensateur de découplage généreux évite les brownouts au boot.
 ## Révision silicium
 
 Vérifier via `esptool.py chip_id` (ou `pio run -t ... ` + esptool). Les ESP32 **rev1** nécessitent
-le flag `-mfix-esp32-psram-cache-issue` (coûteux en débit PSRAM) ; les **rev3** s'en passent — à
-décider en Phase 0 (cf. `platformio.ini` et `docs/PORTING.md`).
+le flag `-mfix-esp32-psram-cache-issue` (coûteux en débit PSRAM) ; les **rev3** s'en passent.
+La carte de référence est **rev v1.1** : le flag est donc actif dans `platformio.ini`.

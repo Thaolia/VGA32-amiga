@@ -22,7 +22,7 @@ Kickstart 1.3 → Workbench) depuis l'ESP32-S3 + écran TFT vers une carte **Lil
 
 ## Matériel
 
-Carte **TTGO VGA32 v1.4** (module WROVER **avec PSRAM** — obligatoire). Connecteur VGA DB15,
+Carte **TTGO VGA32 v1.4** (ESP32 **avec PSRAM** — obligatoire ; flash 4 Mo suffit). Connecteur VGA DB15,
 2× PS/2 (clavier + souris). Audio : DAC interne GPIO25 (filtre + ampli à câbler). Détail du
 câblage et des GPIO : [docs/HARDWARE.md](docs/HARDWARE.md).
 
@@ -49,6 +49,13 @@ pio run -e ttgo-vga32
 > (configurable via `VGA32_ADF_FILENAME`) : au boot, l'ADF est chargé depuis la SD en priorité, et
 > l'ADF embarqué ne sert plus que de repli. Vous pouvez alors sauter `make_adf_header.py` et changer
 > de disquette sans reflasher. Le Kickstart, lui, reste embarqué (`kick_rom.h`).
+
+### Flash & moniteur sous Linux natif
+
+```bash
+pio run -e ttgo-vga32 -t upload --upload-port /dev/ttyACM0   # ou /dev/ttyUSB0 (CP2104)
+pio device monitor -p /dev/ttyACM0
+```
 
 ### Flash & moniteur sous WSL2
 
