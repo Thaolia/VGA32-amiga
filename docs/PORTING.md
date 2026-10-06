@@ -88,7 +88,7 @@ s'il est présent, par blocs de 512 o directement dans `drive_alloc_adf()` → `
 FAT16/FAT32 seulement (pas d'exFAT dans le FatFs du framework). Le Kickstart reste embarqué
 (petit, requis tôt au boot). ⚠️ IO2 partagée avec la LED, IO12 = strapping (gérés au niveau carte).
 
-## Changement de disquette au bouton IO36 (implémenté)
+## Changement de disquette au bouton IO36 (implémenté, validé sur la carte le 2026-10-06)
 
 Bouton **K1** du schéma v1.4 (S_VP = GPIO36, pull-up 10K externe, appui = 0). Chaque appui affiche
 le nom de l'ADF suivant de la SD (ordre alphabétique, circulaire) **en surimpression 4 s** en bas
