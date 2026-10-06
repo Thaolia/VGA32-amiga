@@ -17,8 +17,8 @@ Kickstart 1.3 → Workbench) depuis l'ESP32-S3 + écran TFT vers une carte **Lil
 | **Phase 0** | tronc : VGA FabGL + alloc PSRAM + boucle trame, mesure go/no-go | 🔧 code écrit, à flasher |
 | **Phase 1 — souris** | souris PS/2 → port souris Amiga (bureau utilisable) | 🔧 implémenté, à tester sur matériel |
 | **Phase 1 — SD** | chargement ADF depuis la microSD embarquée | 🔧 implémenté, à tester sur matériel |
-| **Phase 2** | clavier Amiga (nouveau) : CIA-A série + mapping PS/2 | ⏳ stub |
-| **Phase 3** | audio : ring Paula → DAC GPIO25 | ⏳ stub |
+| **Phase 2 — clavier** | clavier Amiga (nouveau) : SDR CIA-A + mapping PS/2 positionnel | 🔧 implémenté, à tester sur matériel |
+| **Phase 3 — audio** | ring Paula → DAC GPIO25 (FabGL SoundGenerator) | 🔧 implémenté, à tester sur matériel |
 
 ## Matériel
 

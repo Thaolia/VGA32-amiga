@@ -114,7 +114,7 @@ static uint8_t cia_read_inner(cia_t *c, int reg)
         return (uint8_t)(c->tod_latch >> 16);
     }
     case 0xB: return 0;  /* 8520: non usato */
-    case 0xC: return 0;  /* SDR: fuori perimetro */
+    case 0xC: return c->sdr;  /* SDR: clavier Amiga (portage VGA32) ; 0 si inutilise */
     case 0xD: {          /* ICR: lettura azzera */
         uint8_t v = c->icr_data;
         c->icr_data = 0;
@@ -200,3 +200,14 @@ void cia_tod_hsync(void) { if (cia_b.tod_running) { cia_b.tod = (cia_b.tod + 1) 
                              if (cia_b.tod == cia_b.tod_alarm) icr_set(&cia_b, 0x04); } }
 void cia_tod_vsync(void) { if (cia_a.tod_running) { cia_a.tod = (cia_a.tod + 1) & 0xFFFFFF;
                              if (cia_a.tod == cia_a.tod_alarm) icr_set(&cia_a, 0x04); } }
+
+#ifdef ARDUINO
+/* Portage VGA32 : le clavier Amiga emule depose un octet serie dans le SDR de
+ * CIA-A et leve l'interruption serie (ICR bit 3 -> PORTS -> INT2), exactement
+ * comme le ferait le MPU clavier reel. sdr_value est deja encode (inverse). */
+void cia_a_kbd_shift_in(uint8_t sdr_value)
+{
+    cia_a.sdr = sdr_value;
+    icr_set(&cia_a, 0x08);
+}
+#endif

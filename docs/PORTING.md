@@ -75,8 +75,24 @@ fichier `/wb.adf` (901120 o, vérif de taille) par blocs de 512 o directement da
 → `drive_mount_ready()`. Le Kickstart reste embarqué (petit, requis tôt au boot). ⚠️ IO2 partagée
 avec la LED, IO12 = strapping (gérés au niveau carte).
 
-## À vérifier avant la Phase 2 (clavier)
+## Clavier Amiga (Phase 2 — implémenté)
 
-`core/cia.cpp` modélise-t-il le port série SP/CNT (registre SDR, flag SP de l'ICR bit 3, INT2) ?
-Si non, `kbd_amiga.cpp` devra l'ajouter à `cia.cpp` — à coordonner, car `cia.cpp` fait partie du
-tronc. L'upstream ne gère que les boutons feu sur CIA-A PRA, pas le clavier.
+Constat : `core/cia.cpp` possédait déjà l'IRQ série (`icr_set(&cia_a, 0x08)` → PORTS → INT2) mais
+le SDR (reg 0xC) était stubé (lecture = 0). Ajouts (retouches HAL, guardées `#ifdef ARDUINO`) :
+- `core/a500.h` : champ `sdr` dans `cia_t` + hook `cia_a_kbd_shift_in`.
+- `core/cia.cpp` : reg 0xC lit `c->sdr` ; `cia_a_kbd_shift_in(v)` dépose l'octet et lève l'IRQ série.
+- `src/hal/kbd_amiga.cpp` : FIFO de rawcodes ; encodage **`SDR = ~((rawcode<<1) | relâche)`** (vérifié
+  sur le driver Linux `amikbd.c`) ; cadencement handshake simplifié (un code par IRQ série acquittée).
+- `src/hal/input_ps2.cpp` : table VirtualKey FabGL → rawcode Amiga **positionnelle** (HRM / amikbd.c ;
+  min./maj. et chiffre/symbole → même touche physique, l'Amiga applique sa keymap via Shift).
+
+Non implémenté volontairement (démarrage simple) : la séquence power-up `0xFD`/`0xFE`. Si KS 1.3
+n'enregistre pas les touches au boot, l'émettre en premier (dans `kbd_amiga.cpp`) est le correctif.
+
+## Audio (Phase 3 — implémenté)
+
+`src/hal/audio_dac.cpp` : `WaveformGenerator` custom dont `getSample()` dépile le ring Paula
+(`paula_ring_pop`, 44100 Hz stéréo 16 b), downmix mono 8 bits, attaché à `fabgl::SoundGenerator`
+(DAC GPIO25, I2S0 — indépendant de l'I2S1 de la VGA). **Ordre critique** : démarré depuis `emu_task`
+APRÈS `paula_reset` (le ring doit exister). Mono 8 bits = qualité modeste ; niveau = décalage `>> 9`
+dans `getSample` (tunable).

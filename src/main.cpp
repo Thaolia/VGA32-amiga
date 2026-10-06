@@ -100,6 +100,7 @@ static void emu_task(void *arg)
     cia_reset();
     custom_reset();
     paula_reset();
+    audio_dac_init();        /* apres paula_reset : le ring Paula est alloue */
     kbd_amiga_init();
     m68k_init();
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
@@ -178,8 +179,8 @@ void setup(void)
     /* 3. sortie VGA (FabGL) : fixe busiestCore/quietCore et branche denise_line_cb */
     video_vga_init();
 
-    /* 4. audio + entree (stubs Phase 0, sans effet) */
-    audio_dac_init();
+    /* 4. entree PS/2 (souris + clavier). L'audio demarre dans emu_task APRES
+     *    paula_reset (le ring Paula doit exister avant la 1ere consommation). */
     input_ps2_init();
 
     /* 5. emulateur sur le coeur calme (FabGL occupe l'autre avec la VGA).

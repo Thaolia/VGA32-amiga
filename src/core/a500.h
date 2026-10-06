@@ -36,6 +36,7 @@ typedef struct {
     uint16_t ta, tb, ta_latch, tb_latch;
     uint8_t  cra, crb;
     uint8_t  icr_data, icr_mask;
+    uint8_t  sdr;              /* registre serie (clavier Amiga, portage VGA32) */
     uint32_t tod, tod_latch, tod_alarm;
     int      tod_latched, tod_running;
     const char *name;
@@ -48,6 +49,9 @@ void    cia_reset(void);
 uint8_t cia_read (cia_t *c, int reg);
 void    cia_write(cia_t *c, int reg, uint8_t v);
 void    cia_tick (int eclocks);      /* E-clock = CPU/10 */
+#ifdef ARDUINO
+void    cia_a_kbd_shift_in(uint8_t sdr_value);  /* clavier Amiga -> SP CIA-A (portage VGA32) */
+#endif
 
 /* ---- chipset custom (0xDFF000) ---- */
 extern uint16_t intena, intreq, dmacon, adkcon;

@@ -49,8 +49,12 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   du cœur ; clavier (P2) à venir. Bornage ±100/trame avec report.
 - `sdcard.cpp` : **chargement ADF depuis la microSD embarquée (P1, implémenté)** → buffer PSRAM du
   drive (`drive_alloc_adf` + `drive_mount_ready`), lecture par blocs de 512 o.
-- `kbd_amiga.cpp` : clavier Amiga émulé — CIA-A série + table VirtualKey→rawcode. *(stub)*
-- `audio_dac.cpp` : ring Paula → `SoundGenerator` DAC GPIO25. *(stub)*
+- `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
+  (`cia_a_kbd_shift_in`) + IRQ série (INT2). Table VirtualKey→rawcode positionnelle dans
+  `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit désormais le registre + nouveau hook.
+- `audio_dac.cpp` : **audio (P3, implémenté)** — `WaveformGenerator` custom → ring Paula
+  (`paula_ring_pop`, 44100 Hz) downmixé mono 8 bits → `SoundGenerator` DAC GPIO25. Démarré depuis
+  `emu_task` après `paula_reset`.
 
 ### Point d'entrée — `src/main.cpp`
 `setup()` : alloc PSRAM, chargement ROM (`kick_rom.h`), ADF (**SD `/wb.adf` en priorité**, sinon
