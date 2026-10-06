@@ -52,6 +52,9 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 - `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
   (`cia_a_kbd_shift_in`) + IRQ série (INT2). Table VirtualKey→rawcode positionnelle dans
   `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit désormais le registre + nouveau hook.
+- `serial_kbd.cpp` : **clavier via port série USB (implémenté)** — caractères reçus sur `Serial`
+  (CP2104) → table ASCII→rawcode US + séquences curseur ESC[ → `kbd_amiga`. Pour les configs sans
+  clavier PS/2 ; en parallèle du PS/2.
 - `audio_dac.cpp` : **audio (P3, implémenté)** — `WaveformGenerator` custom → ring Paula
   (`paula_ring_pop`, 44100 Hz) downmixé mono 8 bits → `SoundGenerator` DAC GPIO25. Démarré depuis
   `emu_task` après `paula_reset`.

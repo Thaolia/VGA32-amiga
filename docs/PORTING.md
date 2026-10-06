@@ -89,6 +89,16 @@ le SDR (reg 0xC) était stubé (lecture = 0). Ajouts (retouches HAL, guardées `
 Non implémenté volontairement (démarrage simple) : la séquence power-up `0xFD`/`0xFE`. Si KS 1.3
 n'enregistre pas les touches au boot, l'émettre en premier (dans `kbd_amiga.cpp`) est le correctif.
 
+## Clavier série USB (implémenté)
+
+Pour les configs **sans clavier PS/2** (l'ESP32 classique n'a pas d'USB host ; un adaptateur
+USB→PS/2 passif ne marche qu'avec un clavier dual-protocol). `src/hal/serial_kbd.cpp` lit les
+caractères du port série (CP2104) et les convertit en frappes Amiga via une table **ASCII→rawcode
+US** (+ Shift déduit du caractère), plus les séquences `ESC[A/B/C/D` → curseurs. Réutilise toute la
+Phase 2 (`kbd_amiga` + SDR CIA-A). Appelé chaque trame dans `emu_task`, en parallèle du PS/2 ;
+flag `VGA32_SERIAL_KBD`. Limites : pas de maintien de touche (chaque caractère = press+release),
+pas de Ctrl/Alt/Amiga isolés (modificateurs déduits du caractère seulement).
+
 ## Audio (Phase 3 — implémenté)
 
 `src/hal/audio_dac.cpp` : `WaveformGenerator` custom dont `getSample()` dépile le ring Paula

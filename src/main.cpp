@@ -26,6 +26,7 @@
 #include "input_ps2.h"
 #include "kbd_amiga.h"
 #include "sdcard.h"
+#include "serial_kbd.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
 #include "sinfl.h"           /* zsinflate (declaration) */
@@ -113,7 +114,10 @@ static void emu_task(void *arg)
         int64_t t0 = esp_timer_get_time();
         cur_frame++;
 
-        input_ps2_poll();        /* souris/clavier PS2 (stub Phase 0) */
+        input_ps2_poll();        /* souris + clavier PS/2 */
+#if VGA32_SERIAL_KBD
+        serial_kbd_poll();       /* clavier via port serie USB (sans PS/2) */
+#endif
         input_frame(cur_frame);
         copper_vblank();
         sprite_vblank();

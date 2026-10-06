@@ -49,6 +49,12 @@
  * (+ filtre passe-bas/ampli externes à câbler). Mono 8 bits. */
 #define VGA32_AUDIO_DAC_GPIO   25
 
+/* ---- Clavier via le port série USB (CP2104) ----
+ * Permet de taper dans l'Amiga depuis le terminal série du PC quand on n'a pas
+ * de clavier PS/2 (ou pas d'adaptateur USB->PS/2 actif). Fonctionne EN PARALLÈLE
+ * du clavier PS/2 (les deux alimentent kbd_amiga). 0 pour désactiver. */
+#define VGA32_SERIAL_KBD   1
+
 /* ---- Timing trame PAL (repris des #define de l'ancien a500_esp32.ino) ----
  * 1 trame PAL = 312 lignes de 455 cycles CPU. Non présents dans a500.h. */
 #define LINES_PAL   312

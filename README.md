@@ -17,7 +17,7 @@ Kickstart 1.3 → Workbench) depuis l'ESP32-S3 + écran TFT vers une carte **Lil
 | **Phase 0** | tronc : VGA FabGL + alloc PSRAM + boucle trame, mesure go/no-go | 🔧 code écrit, à flasher |
 | **Phase 1 — souris** | souris PS/2 → port souris Amiga (bureau utilisable) | 🔧 implémenté, à tester sur matériel |
 | **Phase 1 — SD** | chargement ADF depuis la microSD embarquée | 🔧 implémenté, à tester sur matériel |
-| **Phase 2 — clavier** | clavier Amiga (nouveau) : SDR CIA-A + mapping PS/2 positionnel | 🔧 implémenté, à tester sur matériel |
+| **Phase 2 — clavier** | clavier Amiga (nouveau) : SDR CIA-A + mapping positionnel. Entrée **PS/2 et/ou série USB** | 🔧 implémenté, à tester sur matériel |
 | **Phase 3 — audio** | ring Paula → DAC GPIO25 (FabGL SoundGenerator) | 🔧 implémenté, à tester sur matériel |
 
 ## Matériel
@@ -73,6 +73,12 @@ python3.exe -mserial.tools.miniterm COM11 115200
 Au boot, le moniteur série affiche l'alloc PSRAM, la décompression de l'ADF, le reset du 68000
 (`PC=FC00D2`), puis un profiling par trame (fps, heap). Le bureau Workbench apparaît sur le
 moniteur VGA.
+
+> **Clavier sans PS/2 ?** Si tu n'as pas de clavier PS/2 (ni d'adaptateur USB→PS/2 *actif* — les
+> embouts passifs ne marchent qu'avec un clavier « dual-protocol »), tu peux taper **directement dans
+> l'Amiga depuis le terminal série** : tout caractère tapé dans `miniterm`/`pio device monitor` est
+> converti en frappe Amiga. Flèches gérées (séquences ESC[). Fonctionne en parallèle du PS/2 ;
+> désactivable via `VGA32_SERIAL_KBD`.
 
 ## Harnais de régression (build PC)
 
