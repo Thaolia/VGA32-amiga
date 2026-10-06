@@ -1,0 +1,10 @@
+{
+  "name": "musashi",
+  "version": "4.5-vga32",
+  "description": "Noyau CPU Motorola 68000 (Karl Stenerud, MIT). Tables d'opcodes patchees en forme pointeur, allouees en PSRAM (voir m68kops.c).",
+  "license": "MIT",
+  "build": {
+    "srcFilter": ["-<*>", "+<m68kcpu.c>", "+<m68kops.c>", "+<softfloat/softfloat.c>"],
+    "flags": ["-I."]
+  }
+}

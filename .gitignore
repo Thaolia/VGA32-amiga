@@ -1,0 +1,29 @@
+# ---- Matériel Amiga sous copyright : JAMAIS committer ----
+# Générés par tools/ depuis VOS fichiers légaux (Kickstart ROM, ADF).
+assets/kick_rom.h
+assets/wb_adf.h
+*.rom
+*.adf
+*.A500
+
+# ---- Artefacts de build ----
+.pio/
+build/
+*.o
+
+# ---- Harnais PC : binaire + sorties régénérables (make) ----
+tests/pc/a500
+tests/pc/*.ppm
+tests/pc/*.wav
+tests/pc/*.ram
+tests/pc/boot_check.txt
+tests/pc/test/testrom*.bin
+
+# ---- Config locale Claude Code ----
+.claude/
+
+# ---- Divers ----
+*token*
+secrets*
+credentials*
+*.key

@@ -1,0 +1,9 @@
+{
+  "name": "sinfl",
+  "version": "1.0",
+  "description": "Inflate zlib single-header (Micha Mettke). sinfl_impl.cpp fournit zsinflate() pour decompresser l'ADF Workbench en PSRAM.",
+  "build": {
+    "srcFilter": ["-<*>", "+<sinfl_impl.cpp>"],
+    "flags": ["-I."]
+  }
+}
