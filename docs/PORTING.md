@@ -64,16 +64,16 @@ ESP32). C'est la taxe inhérente à Musashi sur ESP32 et le cœur du risque perf
 - **Écran ne tient pas le timing** : modeline custom 320×256, ou repli `VGA_640x240_60Hz` crop.
 - **Silicium rev1** : ajouter `-mfix-esp32-psram-cache-issue` dans `platformio.ini` (coût débit).
 
-## Option : charger l'ADF depuis la carte SD (au lieu de l'embarquer)
+## Chargement ADF depuis la carte SD (implémenté — Phase 1)
 
-Faisable et plus souple que `wb_adf.h` embarqué (changement de disquette sans reflasher), **et sans
-matériel additionnel** : le schéma v1.4 confirme un **slot microSD embarqué** (SPI, CS=13 CLK=14
-MOSI=12 MISO=2, cf. `docs/HARDWARE.md`) qui n'entre en conflit ni avec la VGA, ni le PS/2, ni
-l'audio. Le cœur expose déjà l'API : `drive_alloc_adf()` → lire le fichier `.adf` de la SD dans ce
-buffer PSRAM → `drive_mount_ready()`. Implémentation (Phase 1+) : monter la SD via la lib Arduino
-`SD`/`SPI` en passant explicitement ces 4 broches (pas les pins par défaut de FabGL), puis remplacer
-`load_workbench()` de `main.cpp`. Le Kickstart, lui, reste pertinent à embarquer (petit, requis tôt
-au boot). ⚠️ IO2 partagée avec la LED, IO12 = strapping (gérés au niveau carte).
+Implémenté dans `src/hal/sdcard.cpp` (`sdcard_load_adf`), appelé en priorité par `load_workbench()`
+de `main.cpp` ; l'ADF embarqué (`wb_adf.h`) n'est plus qu'un repli. Plus souple (changement de
+disquette sans reflasher) **et sans matériel additionnel** : slot microSD embarqué (SPI, CS=13
+CLK=14 MOSI=12 MISO=2, cf. `docs/HARDWARE.md`), sans conflit VGA/PS2/audio. Mécanisme : `SPIClass`
+sur HSPI avec ces 4 broches explicites (pas les pins par défaut de FabGL) → `SD.begin` → lecture du
+fichier `/wb.adf` (901120 o, vérif de taille) par blocs de 512 o directement dans `drive_alloc_adf()`
+→ `drive_mount_ready()`. Le Kickstart reste embarqué (petit, requis tôt au boot). ⚠️ IO2 partagée
+avec la LED, IO12 = strapping (gérés au niveau carte).
 
 ## À vérifier avant la Phase 2 (clavier)
 

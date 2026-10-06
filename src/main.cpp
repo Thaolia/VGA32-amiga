@@ -25,6 +25,7 @@
 #include "audio_dac.h"
 #include "input_ps2.h"
 #include "kbd_amiga.h"
+#include "sdcard.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
 #include "sinfl.h"           /* zsinflate (declaration) */
@@ -69,6 +70,11 @@ static void decomp_task(void *arg)
 }
 static bool load_workbench(void)
 {
+    /* 1. priorite a la carte SD : disquette echangeable sans reflasher */
+    if (sdcard_load_adf(VGA32_ADF_FILENAME)) return true;
+    Serial.println("[WB] SD indisponible -> repli sur l'ADF embarque (wb_adf.h)");
+
+    /* 2. repli : ADF embarque, decompresse en PSRAM */
     uint8_t *dst = drive_alloc_adf();
     if (!dst) { Serial.println("ERREUR: alloc ADF echouee"); return false; }
     s_wb_result = -999;

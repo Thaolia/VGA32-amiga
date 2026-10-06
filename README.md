@@ -14,8 +14,9 @@ Kickstart 1.3 → Workbench) depuis l'ESP32-S3 + écran TFT vers une carte **Lil
 | Phase | Contenu | Statut |
 |---|---|---|
 | **Cœur Musashi** | reconstruction forme pointeur (tables en PSRAM), conf 68000-only | ✅ validé (6/6 sentinelles PC) |
-| **Phase 0** | tronc : VGA FabGL + alloc PSRAM + boucle trame, mesure go/no-go | 🔧 code écrit, à compiler/flasher |
-| **Phase 1** | souris PS/2 → port souris Amiga (bureau utilisable) | ⏳ stub |
+| **Phase 0** | tronc : VGA FabGL + alloc PSRAM + boucle trame, mesure go/no-go | 🔧 code écrit, à flasher |
+| **Phase 1 — souris** | souris PS/2 → port souris Amiga (bureau utilisable) | 🔧 implémenté, à tester sur matériel |
+| **Phase 1 — SD** | chargement ADF depuis la microSD embarquée | 🔧 implémenté, à tester sur matériel |
 | **Phase 2** | clavier Amiga (nouveau) : CIA-A série + mapping PS/2 | ⏳ stub |
 | **Phase 3** | audio : ring Paula → DAC GPIO25 | ⏳ stub |
 
@@ -42,6 +43,12 @@ python3 tools/make_adf_header.py  /chemin/vers/workbench13.adf  assets # -> asse
 # 2. Compiler (côté Linux/WSL2)
 pio run -e ttgo-vga32
 ```
+
+> **Disquette depuis la carte SD (alternative à `wb_adf.h`)** : la carte VGA32 v1.4 a un slot
+> microSD embarqué. Copiez votre `.adf` (880 Ko, DD) à la racine de la SD sous le nom **`/wb.adf`**
+> (configurable via `VGA32_ADF_FILENAME`) : au boot, l'ADF est chargé depuis la SD en priorité, et
+> l'ADF embarqué ne sert plus que de repli. Vous pouvez alors sauter `make_adf_header.py` et changer
+> de disquette sans reflasher. Le Kickstart, lui, reste embarqué (`kick_rom.h`).
 
 ### Flash & moniteur sous WSL2
 

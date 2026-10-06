@@ -116,6 +116,9 @@ void     input_set_lmb(int v);
 void     input_set_rmb(int v);
 int      input_lmb(void);
 int      input_rmb(void);
+#ifdef ARDUINO
+void     input_mouse_delta(int dx, int dy);   /* portage VGA32 : souris PS/2 */
+#endif
 uint8_t drive_pra_bits(void);           /* bit 2-5 di CIA-A PRA   */
 
 /* ---- log & trace ---- */

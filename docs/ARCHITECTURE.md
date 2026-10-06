@@ -45,13 +45,17 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   tailles de pile, flag `VGA32_DEBUG`.
 - `video_vga.cpp` : `VGAController` 64 c. ; LUT couleur ; callback Denise (blit `row[x^2]`,
   `g_row_onscreen`).
-- `input_ps2.cpp` : souris (P1), clavier (P2) via FabGL PS/2. *(stub)*
+- `input_ps2.cpp` : **souris PS/2 (P1, implémentée)** → `input_mouse_delta`/`input_set_lmb/rmb`
+  du cœur ; clavier (P2) à venir. Bornage ±100/trame avec report.
+- `sdcard.cpp` : **chargement ADF depuis la microSD embarquée (P1, implémenté)** → buffer PSRAM du
+  drive (`drive_alloc_adf` + `drive_mount_ready`), lecture par blocs de 512 o.
 - `kbd_amiga.cpp` : clavier Amiga émulé — CIA-A série + table VirtualKey→rawcode. *(stub)*
 - `audio_dac.cpp` : ring Paula → `SoundGenerator` DAC GPIO25. *(stub)*
 
 ### Point d'entrée — `src/main.cpp`
-`setup()` : alloc PSRAM, chargement ROM (`kick_rom.h`) + décompression ADF (`wb_adf.h` via
-`zsinflate`), `video_vga_init()`, création de `emu_task` sur `quietCore()`. `loop()` idle.
+`setup()` : alloc PSRAM, chargement ROM (`kick_rom.h`), ADF (**SD `/wb.adf` en priorité**, sinon
+`wb_adf.h` décompressé via `zsinflate`), `video_vga_init()`, `input_ps2_init()`, création de
+`emu_task` sur `quietCore()`. `loop()` idle. `emu_task` sonde la souris (`input_ps2_poll`) chaque trame.
 `emu_task()` : init cœur (dont `m68k_init` qui alloue les tables Musashi en PSRAM) + boucle trame.
 
 ## Flux d'une trame

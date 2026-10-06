@@ -34,6 +34,16 @@
  * on passe par PS2Controller::begin(PS2Preset::KeyboardPort0_MousePort1).
  */
 
+/* ---- Carte SD embarquee (SPI, schema v1.4) ----
+ * Slot microSD cable sur ces 4 broches (pas les defauts FabGL). Aucun conflit
+ * avec VGA/PS2/audio. IO2 partagee avec la LED, IO12 = strapping (geres carte). */
+#define VGA32_SD_CS        13
+#define VGA32_SD_SCK       14
+#define VGA32_SD_MOSI      12
+#define VGA32_SD_MISO       2
+#define VGA32_ADF_SIZE     901120u          /* ADF DD standard (= ADF_SIZE de drive.cpp) */
+#define VGA32_ADF_FILENAME "/wb.adf"        /* fichier ADF a charger depuis la SD */
+
 /* ---- Audio (Phase 3) ----
  * La VGA32 n'a pas de DAC I2S externe : FabGL sort le son sur le DAC interne GPIO25
  * (+ filtre passe-bas/ampli externes à câbler). Mono 8 bits. */

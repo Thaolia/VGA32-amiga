@@ -117,3 +117,14 @@ int input_lmb(void) { return lmb; }
 void input_set_lmb(int v) { lmb = v; }
 void input_set_rmb(int v) { rmb = v; }
 int input_rmb(void) { return rmb; }
+
+#ifdef ARDUINO
+/* Portage VGA32 : injection directe du mouvement souris. La souris PS/2 pousse
+ * ses deltas dans les compteurs libres mx/my ; input.device calcule le delta
+ * 8 bits signe a chaque vblank. L'appelant borne le delta par trame a +-127. */
+void input_mouse_delta(int dx, int dy)
+{
+    mx = (uint8_t)(mx + dx);
+    my = (uint8_t)(my + dy);
+}
+#endif
