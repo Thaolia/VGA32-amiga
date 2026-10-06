@@ -61,6 +61,16 @@ void drive_mount_ready(void)
     chng_latch = 1;
     logmsg("[DRV] disco montato in PSRAM (901120 byte, write-protected)\n");
 }
+/* portage VGA32 : éjection (changement de disquette par bouton). Le buffer ADF
+ * peut ensuite être réécrit hors de l'émulateur : drive_adf() rend NULL tant que
+ * drive_mount_ready() n'a pas été rappelé. /CHNG reste bas jusqu'au prochain step
+ * disque inséré -> trackdisk voit le changement. */
+void drive_eject(void)
+{
+    disk_present = 0;
+    chng_latch = 1;
+    logmsg("[DRV] disco espulso\n");
+}
 #endif
 
 #ifndef ARDUINO

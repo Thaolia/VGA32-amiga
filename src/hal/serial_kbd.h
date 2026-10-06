@@ -1,13 +1,13 @@
-/* serial_kbd.h — Clavier via le port série USB (CP2104).
+/* serial_kbd.h — Clavier + souris via le port série USB.
  *
- * Alternative/complément au clavier PS/2 : les caractères tapés dans le terminal
- * série du PC (pio device monitor / miniterm) sont convertis en frappes Amiga et
- * injectés dans kbd_amiga, exactement comme le clavier PS/2.
+ * Alternative/complément au PS/2 : trames binaires de tools/remote_input.py
+ * (clavier complet + souris) ou caractères tapés dans un terminal série
+ * (pio device monitor / miniterm), injectés comme le PS/2.
  */
 #ifndef SERIAL_KBD_H
 #define SERIAL_KBD_H
 
-/* Lit les octets disponibles sur Serial et pousse les frappes dans kbd_amiga.
+/* Lit les octets disponibles sur Serial : frappes -> kbd_amiga, souris -> port souris.
  * À appeler une fois par trame depuis emu_task. Aucun init (Serial déjà démarré). */
 void serial_kbd_poll(void);
 

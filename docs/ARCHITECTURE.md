@@ -43,18 +43,25 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 ### Couche matérielle — `src/hal/`
 - `platform_esp32.h` : broches, modeline VGA, mappage écran (`VGA32_VSTART`), timing trame,
   tailles de pile, flag `VGA32_DEBUG`.
-- `video_vga.cpp` : `VGAController` 64 c. ; LUT couleur ; callback Denise (blit `row[x^2]`,
-  `g_row_onscreen`).
+- `video_vga.cpp` : `VGAController` 64 c. ; LUT couleur ; callback Denise en **IRAM** (blit
+  `row[x^2]`, `g_row_onscreen`) ; surimpression texte 8x8 (`video_vga_osd_show/tick`) avec
+  sauvegarde/restauration des pixels sous le cadre.
 - `input_ps2.cpp` : **souris PS/2 (P1, implémentée)** → `input_mouse_delta`/`input_set_lmb/rmb`
   du cœur ; clavier (P2) à venir. Bornage ±100/trame avec report.
-- `sdcard.cpp` : **chargement ADF depuis la microSD embarquée (P1, implémenté)** → buffer PSRAM du
-  drive (`drive_alloc_adf` + `drive_mount_ready`), lecture par blocs de 512 o.
+- `sdcard.cpp` : **ADF depuis la microSD embarquée (P1, implémenté)** — montage (FAT16/32) et
+  liste triée des `.adf` DD de la racine au boot ; lecture par blocs de 512 o dans un buffer donné.
+- `disk_switch.cpp` + `disk_select.cpp` : **changement de disquette au bouton IO36** — logique pure
+  (anti-rebond, sélection circulaire, validation 1,5 s après le dernier appui) + glue : OSD du
+  nom, `drive_eject` → tâche `adfload` (lecture SD sur le cœur VGA) → `drive_mount_ready`.
 - `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
   (`cia_a_kbd_shift_in`) + IRQ série (INT2). Table VirtualKey→rawcode positionnelle dans
   `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit désormais le registre + nouveau hook.
-- `serial_kbd.cpp` : **clavier via port série USB (implémenté)** — caractères reçus sur `Serial`
-  (CP2104) → table ASCII→rawcode US + séquences curseur ESC[ → `kbd_amiga`. Pour les configs sans
-  clavier PS/2 ; en parallèle du PS/2.
+- `serial_kbd.cpp` : **clavier + souris via port série USB (implémenté)** — octets de `Serial`
+  démultiplexés par `serial_proto.cpp` : trames binaires de `tools/remote_input.py` (rawcode
+  exact → `kbd_amiga`, souris → `input_mouse_delta`/`input_set_lmb/rmb`, bornage ±100/trame) ;
+  octets hors trame = mode texte (table ASCII→rawcode US + ESC[ → `kbd_amiga`). En parallèle du PS/2.
+- `serial_proto.cpp` : décodeur pur (sans Arduino) des trames `0xA5 TYPE PAYLOAD CHK`, testé hôte
+  dans `tests/hal/`.
 - `audio_dac.cpp` : **audio (P3, implémenté)** — `WaveformGenerator` custom → ring Paula
   (`paula_ring_pop`, 44100 Hz) downmixé mono 8 bits → `SoundGenerator` DAC GPIO25. Démarré depuis
   `emu_task` après `paula_reset`.

@@ -78,14 +78,43 @@ heap interne stable à 169,6 Ko. Aspect du bureau et stabilité VGA : à confirm
 
 ## Chargement ADF depuis la carte SD (implémenté — Phase 1)
 
-Implémenté dans `src/hal/sdcard.cpp` (`sdcard_load_adf`), appelé en priorité par `load_workbench()`
+Implémenté dans `src/hal/sdcard.cpp` (`sdcard_init` + `sdcard_read_adf`), appelé en priorité par `load_workbench()`
 de `main.cpp` ; l'ADF embarqué (`wb_adf.h`) n'est plus qu'un repli. Plus souple (changement de
 disquette sans reflasher) **et sans matériel additionnel** : slot microSD embarqué (SPI, CS=13
 CLK=14 MOSI=12 MISO=2, cf. `docs/HARDWARE.md`), sans conflit VGA/PS2/audio. Mécanisme : `SPIClass`
-sur HSPI avec ces 4 broches explicites (pas les pins par défaut de FabGL) → `SD.begin` → lecture du
-fichier `/wb.adf` (901120 o, vérif de taille) par blocs de 512 o directement dans `drive_alloc_adf()`
-→ `drive_mount_ready()`. Le Kickstart reste embarqué (petit, requis tôt au boot). ⚠️ IO2 partagée
-avec la LED, IO12 = strapping (gérés au niveau carte).
+sur HSPI avec ces 4 broches explicites (pas les pins par défaut de FabGL) → `SD.begin` (la SD
+**reste montée**) → liste des `.adf` de la racine à 901120 o, triés par nom → lecture de `wb.adf`
+s'il est présent, par blocs de 512 o directement dans `drive_alloc_adf()` → `drive_mount_ready()`.
+FAT16/FAT32 seulement (pas d'exFAT dans le FatFs du framework). Le Kickstart reste embarqué
+(petit, requis tôt au boot). ⚠️ IO2 partagée avec la LED, IO12 = strapping (gérés au niveau carte).
+
+## Changement de disquette au bouton IO36 (implémenté)
+
+Bouton **K1** du schéma v1.4 (S_VP = GPIO36, pull-up 10K externe, appui = 0). Chaque appui affiche
+le nom de l'ADF suivant de la SD (ordre alphabétique, circulaire) **en surimpression 4 s** en bas
+de l'écran VGA ; la disquette est insérée **1,5 s après le dernier appui** (on peut défiler sans
+tout charger). Découpage :
+- `disk_select.cpp` : logique pure (anti-rebond 150 ms, sélection, validation différée,
+  débordement de `millis()`), testée hôte (`tests/hal/test_disk_select.cpp`).
+- `disk_switch.cpp` : glue. Le lecteur n'est manipulé que par `emu_task` (`drive_eject` →
+  lecture → `drive_mount_ready`) ; la lecture SD tourne dans une tâche `adfload` (cœur VGA,
+  priorité 1) pendant que DF0 est éjecté (`drive_adf()` = NULL, le cœur n'y touche pas). Deux
+  files FreeRTOS = transfert + barrière mémoire inter-cœurs. Une sélection validée pendant une
+  lecture est enchaînée ensuite. Échec de lecture → DF0 reste vide, message « Erreur SD ».
+- Cœur : **un seul hook** `drive_eject()` (`core/drive.cpp`, `#ifdef ARDUINO`) : `disk_present = 0`,
+  `/CHNG` latché bas jusqu'au prochain step disque inséré → trackdisk voit le changement.
+- OSD (`video_vga.cpp`) : police `fabgl::FONT_8x8`, bandeau 12 lignes à `VGA32_OSD_Y`. Le cœur
+  saute les lignes inchangées : on garde une copie des pixels Amiga **sous** le cadre (mise à jour
+  par `denise_cb`), on redessine le texte sur chaque ligne rendue, et on restaure exactement
+  l'image à l'échéance.
+
+**Mesuré — `denise_cb` doit être en IRAM.** Ajouter les deux appels par trame (17 µs mesurés) a
+fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs) et le repos de
+34,6 à 32,3 fps, alors que le padding de `main.cpp` ne changeait rien. Avec `IRAM_ATTR` sur
+`denise_cb` et `osd_draw_row` : retour exact aux valeurs de référence (24,0 fps trame 150,
+34,6 fps au repos). Lecture : le callback par ligne, en flash, entre en conflit de cache
+(flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
+chaud en IRAM.
 
 ## Clavier Amiga (Phase 2 — implémenté)
 
@@ -108,8 +137,33 @@ USB→PS/2 passif ne marche qu'avec un clavier dual-protocol). `src/hal/serial_k
 caractères du port série (CP2104) et les convertit en frappes Amiga via une table **ASCII→rawcode
 US** (+ Shift déduit du caractère), plus les séquences `ESC[A/B/C/D` → curseurs. Réutilise toute la
 Phase 2 (`kbd_amiga` + SDR CIA-A). Appelé chaque trame dans `emu_task`, en parallèle du PS/2 ;
-flag `VGA32_SERIAL_KBD`. Limites : pas de maintien de touche (chaque caractère = press+release),
-pas de Ctrl/Alt/Amiga isolés (modificateurs déduits du caractère seulement).
+flag `VGA32_SERIAL_KBD`. Limites du mode texte : pas de maintien de touche (chaque caractère =
+press+release), pas de Ctrl/Alt/Amiga isolés (modificateurs déduits du caractère seulement).
+
+### Protocole binaire clavier + souris (`tools/remote_input.py`)
+
+Lève ces limites et ajoute la souris. Trame : `0xA5 TYPE PAYLOAD CHK` (CHK = somme 8 bits de
+TYPE+PAYLOAD) ; `'K'` = rawcode | 0x80 si relâchée ; `'M'` = dx, dy (int8, bas = +), boutons (b0 G,
+b1 D). Décodeur pur `src/hal/serial_proto.cpp` (testé hôte : `tests/hal`, `make test`) ; tout octet
+hors trame retombe dans le mode texte, donc un terminal reste utilisable. Choix :
+- **Pas de resynchro sur `0xA5` en cours de trame** : c'est une donnée légitime (relâche de H =
+  `0x25|0x80`). Une trame corrompue est jetée par la somme de contrôle.
+- Souris : deltas cumulés, appliqués bornés ±100 par trame émulée (`input.device` lit un delta
+  8 bits par vblank), comme le PS/2.
+- Côté PC : scancodes USB HID (positionnels, indépendants du layout du PC) → rawcode Amiga ;
+  Inser → HELP ; F12 libère la capture ; perte de focus → relâche de toutes les touches.
+- **Ouverture du port sans reboot** : laisser DTR et RTS actifs. Linux les lève ensemble à l'ouverture
+  (neutre) ; les baisser via pyserial passe par un instant « RTS seul » qui tire EN à 0 (mesuré :
+  reboot à chaque connexion avant correctif, aucun après).
+- `pygame` (>= 2, ex. paquet système) ou **`pygame-ce`** (wheels pip pour Python 3.14). Le mode souris
+  relatif s'obtient par curseur caché + `set_grab` (les deux) ; `set_relative_mode` n'existe que
+  dans pygame-ce, donc appelé seulement s'il est présent.
+
+### Adaptateurs USB→PS/2 passifs
+
+Constaté sur la carte de référence : clavier + souris USB filaires via adaptateur passif →
+`[PS2] clavier: ABSENT, souris: ABSENTE` (aucune réponse au reset PS/2, LED éteintes). Ces
+périphériques ne parlent qu'USB ; l'init PS/2 attend alors ~7 s avant d'abandonner (boot plus long).
 
 ## Audio (Phase 3 — implémenté)
 

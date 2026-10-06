@@ -1,0 +1,19 @@
+# Tests hôte des modules HAL purs (sans Arduino).
+CXX      = g++
+CXXFLAGS = -O2 -Wall -Wextra -I../../src/hal
+HAL      = ../../src/hal
+TESTS    = test_serial_proto test_disk_select
+
+test: $(TESTS)
+	@for t in $(TESTS); do ./$$t || exit 1; done
+
+test_serial_proto: test_serial_proto.cpp $(HAL)/serial_proto.cpp $(HAL)/serial_proto.h
+	$(CXX) $(CXXFLAGS) -o $@ test_serial_proto.cpp $(HAL)/serial_proto.cpp
+
+test_disk_select: test_disk_select.cpp $(HAL)/disk_select.cpp $(HAL)/disk_select.h
+	$(CXX) $(CXXFLAGS) -o $@ test_disk_select.cpp $(HAL)/disk_select.cpp
+
+clean:
+	rm -f $(TESTS)
+
+.PHONY: test clean

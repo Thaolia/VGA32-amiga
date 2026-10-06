@@ -27,3 +27,8 @@ tests/pc/test/testrom*.bin
 secrets*
 credentials*
 *.key
+
+# ---- Tests hôte HAL : binaire ----
+tests/hal/test_serial_proto
+tests/hal/test_disk_select
+__pycache__/

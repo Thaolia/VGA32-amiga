@@ -98,6 +98,7 @@ int     drive_insert_adf(const char *path);
 int     drive_set_adf(const uint8_t *data, uint32_t len);
 uint8_t *drive_alloc_adf(void);
 void    drive_mount_ready(void);
+void    drive_eject(void);
 #endif
 int     drive_track(void);
 int     drive_side(void);

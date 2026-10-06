@@ -44,11 +44,12 @@ python3 tools/make_adf_header.py  /chemin/vers/workbench13.adf  assets # -> asse
 pio run -e ttgo-vga32
 ```
 
-> **Disquette depuis la carte SD (alternative à `wb_adf.h`)** : la carte VGA32 v1.4 a un slot
-> microSD embarqué. Copiez votre `.adf` (880 Ko, DD) à la racine de la SD sous le nom **`/wb.adf`**
-> (configurable via `VGA32_ADF_FILENAME`) : au boot, l'ADF est chargé depuis la SD en priorité, et
-> l'ADF embarqué ne sert plus que de repli. Vous pouvez alors sauter `make_adf_header.py` et changer
-> de disquette sans reflasher. Le Kickstart, lui, reste embarqué (`kick_rom.h`).
+> **Disquettes sur la carte SD** : la carte VGA32 v1.4 a un slot microSD embarqué. Formatez-la en
+> **FAT32** (ou FAT16 — **pas exFAT**, non supporté) et copiez vos `.adf` (880 Ko, DD) à la racine.
+> Au boot, **`wb.adf`** est inséré s'il existe (configurable via `VGA32_ADF_FILENAME`), sinon l'ADF
+> embarqué sert de repli. Le **bouton K1 (IO36)** fait défiler les `.adf` de la SD (ordre
+> alphabétique) : le nom s'affiche 4 s en bas de l'écran, et la disquette est insérée 1,5 s après le
+> dernier appui. Le Kickstart, lui, reste embarqué (`kick_rom.h`).
 
 ### Flash & moniteur sous Linux natif
 
@@ -81,11 +82,21 @@ Au boot, le moniteur série affiche l'alloc PSRAM, la décompression de l'ADF, l
 (`PC=FC00D2`), puis un profiling par trame (fps, heap). Le bureau Workbench apparaît sur le
 moniteur VGA.
 
-> **Clavier sans PS/2 ?** Si tu n'as pas de clavier PS/2 (ni d'adaptateur USB→PS/2 *actif* — les
-> embouts passifs ne marchent qu'avec un clavier « dual-protocol »), tu peux taper **directement dans
-> l'Amiga depuis le terminal série** : tout caractère tapé dans `miniterm`/`pio device monitor` est
-> converti en frappe Amiga. Flèches gérées (séquences ESC[). Fonctionne en parallèle du PS/2 ;
-> désactivable via `VGA32_SERIAL_KBD`.
+### Clavier + souris sans PS/2 (via le câble USB)
+
+Les adaptateurs USB→PS/2 *passifs* ne marchent qu'avec des périphériques « dual-protocol ». Sans
+vrai PS/2, le clavier et la souris du PC passent par le port série :
+
+```bash
+python3 -m venv ~/.venvs/vga32-remote
+~/.venvs/vga32-remote/bin/pip install pygame-ce pyserial     # ou pygame >= 2 déjà installé
+~/.venvs/vga32-remote/bin/python tools/remote_input.py --port /dev/ttyACM0
+```
+
+Cliquer dans la fenêtre capture clavier + souris (touches maintenues, Ctrl/Alt/Amiga = Super,
+Inser = HELP) ; **F12** libère. Options : `--mouse-scale 1.5`, `--no-log` (masque les logs série).
+Se connecter ne reboote pas la carte. Un simple terminal (`pio device monitor`) permet aussi de
+taper du texte (sans souris ni maintien de touche). Désactivable via `VGA32_SERIAL_KBD`.
 
 ## Harnais de régression (build PC)
 

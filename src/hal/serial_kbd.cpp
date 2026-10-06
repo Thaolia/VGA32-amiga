@@ -1,18 +1,25 @@
-/* serial_kbd.cpp — Clavier via le port série USB (CP2104).
+/* serial_kbd.cpp — Clavier + souris via le port série USB.
  *
- * Convertit les caractères reçus sur Serial en frappes Amiga (rawcode + Shift) et
- * les injecte dans kbd_amiga (down puis up, entourés de Shift si nécessaire).
+ * Deux modes coexistent sur le même flux (démultiplexés par serial_proto) :
+ *  - trames binaires de tools/remote_input.py : touches enfoncées/relâchées
+ *    (rawcode exact, maintien et modificateurs inclus) + souris ;
+ *  - texte d'un terminal : caractères convertis en frappes Amiga (rawcode + Shift),
+ *    injectées dans kbd_amiga (down puis up, entourés de Shift si nécessaire).
  * Réutilise toute la Phase 2 (encodage SDR + émulation série CIA-A).
  *
  * Mapping ASCII -> touche PHYSIQUE US + état Shift (comme un vrai clavier US).
  * Gère aussi les séquences ESC [ A/B/C/D du terminal -> curseurs Amiga.
  *
- * Limites (vs PS/2) : pas de maintien de touche (chaque caractère = press+release),
- * modificateurs limités (Shift déduit du caractère ; pas de Ctrl/Alt/Amiga isolés).
+ * Limites du mode texte (levées par les trames binaires) : pas de maintien de touche
+ * (chaque caractère = press+release), Shift déduit du caractère, pas de Ctrl/Alt/Amiga.
  */
 #include <Arduino.h>
 #include "serial_kbd.h"
+#include "serial_proto.h"
 #include "kbd_amiga.h"
+#include "a500.h"
+
+#define MOUSE_STEP_MAX 100   /* delta souris max appliqué par trame (< 127), comme le PS/2 */
 
 /* ASCII -> (rawcode Amiga, shift). Retourne false si non mappé. */
 static bool ascii_to_amiga(char c, uint8_t *raw, bool *shift)
@@ -69,11 +76,26 @@ static void emit(uint8_t raw, bool shift)
 void serial_kbd_poll(void)
 {
     static int esc = 0;   /* 0 = normal, 1 = ESC reçu, 2 = ESC[ reçu */
+    static sp_parser_t parser = { 0, 0, 0, 0, { 0, 0, 0 } };
+    /* input.device lit un delta 8 bits par vblank : on cumule les trames souris
+     * reçues et on n'applique qu'un pas borné par trame émulée. */
+    static int pend_x = 0, pend_y = 0;
 
     while (Serial.available() > 0) {
         int ci = Serial.read();
         if (ci < 0) break;
-        char c = (char)ci;
+
+        sp_event_t ev;
+        if (!sp_feed(&parser, (uint8_t)ci, &ev)) continue;
+        if (ev.kind == SP_KEY)   { kbd_amiga_push(ev.a, ev.down); continue; }
+        if (ev.kind == SP_MOUSE) {
+            pend_x += ev.dx;
+            pend_y += ev.dy;
+            input_set_lmb(ev.lmb);
+            input_set_rmb(ev.rmb);
+            continue;
+        }
+        char c = (char)ev.a;
 
         if (esc == 1) {                   /* après ESC : séquence ou ESC isolé */
             if (c == '[') { esc = 2; continue; }
@@ -97,4 +119,12 @@ void serial_kbd_poll(void)
         if (ascii_to_amiga(c, &raw, &shift))
             emit(raw, shift);
     }
+
+    int sx = pend_x >  MOUSE_STEP_MAX ?  MOUSE_STEP_MAX
+           : pend_x < -MOUSE_STEP_MAX ? -MOUSE_STEP_MAX : pend_x;
+    int sy = pend_y >  MOUSE_STEP_MAX ?  MOUSE_STEP_MAX
+           : pend_y < -MOUSE_STEP_MAX ? -MOUSE_STEP_MAX : pend_y;
+    pend_x -= sx;
+    pend_y -= sy;
+    if (sx || sy) input_mouse_delta(sx, sy);
 }

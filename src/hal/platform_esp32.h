@@ -42,7 +42,14 @@
 #define VGA32_SD_MOSI      12
 #define VGA32_SD_MISO       2
 #define VGA32_ADF_SIZE     901120u          /* ADF DD standard (= ADF_SIZE de drive.cpp) */
-#define VGA32_ADF_FILENAME "/wb.adf"        /* fichier ADF a charger depuis la SD */
+#define VGA32_ADF_FILENAME "wb.adf"         /* ADF insere au boot s'il est sur la SD */
+
+/* ---- Bouton de changement de disquette ----
+ * K1 du schema v1.4 : S_VP = GPIO36 (input-only), pull-up 10K externe, appui = 0. */
+#define VGA32_DISK_BTN_GPIO   36
+#define VGA32_OSD_MS          4000u          /* duree d'affichage du nom en surimpression */
+#define VGA32_OSD_Y           224            /* 1re ligne du bandeau (framebuffer 240 lignes) */
+#define LOADER_TASK_STACK     6144           /* FatFs LFN sur pile (CONFIG_FATFS_LFN_STACK) */
 
 /* ---- Audio (Phase 3) ----
  * La VGA32 n'a pas de DAC I2S externe : FabGL sort le son sur le DAC interne GPIO25

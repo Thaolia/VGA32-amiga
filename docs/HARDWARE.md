@@ -26,7 +26,9 @@
 | Audio (DAC → ampli NS4150 + jack 3.5 mm + HP) | 25 | filtre RC + ampli **embarqués** |
 | microSD embarqué (SPI) CS / CLK / MOSI / MISO | 13 / 14 / 12 / 2 | MISO = DAT0 = IO2 |
 | LED embarquée | 2 | **partagée avec SD-MISO** |
-| USB-série (CP2104) | 1 / 3 | TX0 / RX0 |
+| USB-série (CP2104 / CH9102) | 1 / 3 | TX0 / RX0 |
+| Bouton K1 (S_VP) | 36 | input-only, pull-up 10K externe (R9), appui = 0 → changement de disquette |
+| Bouton K2 | RST/EN | reset (R10 10K + C5 1µF) |
 | Flash interne | 6-11 | inutilisables |
 | PSRAM (IPS6404) | 16 / 17 | réservés |
 
@@ -48,6 +50,9 @@ montre un **slot microSD embarqué** câblé en **mode SPI** :
 
 Ces broches **n'entrent en conflit NI avec la VGA, NI le PS/2, NI l'audio** → charger une disquette
 depuis la SD ne coûte aucun périphérique **et sans matériel additionnel** (le slot est sur la carte).
+**Format : FAT16 ou FAT32 uniquement** — le FatFs d'arduino-esp32 2.0.17 est compilé sans exFAT
+(`FF_FS_EXFAT 0` dans `ffconf.h`). Les cartes SDXC (> 32 Go, livrées en exFAT) doivent être
+reformatées en FAT32. Noms longs supportés (LFN 255).
 Remarques (gérées au niveau carte) : **IO2** est partagée avec la LED embarquée (SD DAT0/MISO) ;
 **IO12** est une broche de strapping (tension flash). Côté firmware : ne pas se fier aux pins par
 défaut de FabGL `mountSDCard` ; passer explicitement **CS=13, SCK=14, MOSI=12, MISO=2** (bibliothèque

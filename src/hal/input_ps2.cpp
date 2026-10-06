@@ -120,6 +120,12 @@ void input_ps2_init(void)
      * explicite ici pour lever toute ambiguite). */
     fabgl::Keyboard *k = fabgl::PS2Controller::keyboard();
     if (k) k->setLayout(&fabgl::USLayout);
+    /* begin() envoie un reset PS/2 : un peripherique absent ou non alimente ne
+     * repond pas -> "absent". Distingue panne materielle et bug de mapping. */
+    fabgl::Mouse *m = fabgl::PS2Controller::mouse();
+    Serial.printf("[PS2] clavier: %s, souris: %s\n",
+                  (k && k->isKeyboardAvailable()) ? "detecte" : "ABSENT",
+                  (m && m->isMouseAvailable())    ? "detectee" : "ABSENTE");
 }
 
 void input_ps2_poll(void)

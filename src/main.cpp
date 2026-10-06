@@ -26,6 +26,7 @@
 #include "input_ps2.h"
 #include "kbd_amiga.h"
 #include "sdcard.h"
+#include "disk_switch.h"
 #include "serial_kbd.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
@@ -69,15 +70,25 @@ static void decomp_task(void *arg)
     s_wb_result = zsinflate(dst, WB_ADF_SIZE, wb_adf_comp, WB_ADF_COMP_SIZE);
     vTaskDelete(NULL);
 }
-static bool load_workbench(void)
+/* *sd_idx = index SD de l'ADF insere (-1 : ADF embarque ou aucun) */
+static bool load_workbench(int *sd_idx)
 {
-    /* 1. priorite a la carte SD : disquette echangeable sans reflasher */
-    if (sdcard_load_adf(VGA32_ADF_FILENAME)) return true;
-    Serial.println("[WB] SD indisponible -> repli sur l'ADF embarque (wb_adf.h)");
-
-    /* 2. repli : ADF embarque, decompresse en PSRAM */
+    *sd_idx = -1;
     uint8_t *dst = drive_alloc_adf();
     if (!dst) { Serial.println("ERREUR: alloc ADF echouee"); return false; }
+
+    /* 1. priorite a la carte SD : disquette echangeable sans reflasher */
+    sdcard_init();
+    int i = sdcard_adf_find(VGA32_ADF_FILENAME);
+    if (i >= 0 && sdcard_read_adf(i, dst)) {
+        drive_mount_ready();
+        *sd_idx = i;
+        return true;
+    }
+    Serial.printf("[WB] %s absent/illisible sur la SD -> repli sur l'ADF embarque (wb_adf.h)\n",
+                  VGA32_ADF_FILENAME);
+
+    /* 2. repli : ADF embarque, decompresse en PSRAM */
     s_wb_result = -999;
     xTaskCreatePinnedToCore(decomp_task, "decomp", DECOMP_TASK_STACK, dst, 5,
                             nullptr, fabgl::CoreUsage::quietCore());
@@ -143,6 +154,8 @@ static void emu_task(void *arg)
         cia_tod_vsync();
         intreq_set(5);                     /* VBlank */
         kbd_amiga_step();                  /* emission serie clavier (stub Phase 0) */
+        disk_switch_poll();                /* bouton IO36 : changement de disquette DF0 */
+        video_vga_osd_tick();              /* fin de la surimpression du nom de disquette */
 
 #if VGA32_DEBUG
         if ((cur_frame % 50) == 0) {
@@ -178,10 +191,15 @@ void setup(void)
 
     /* 2. Kickstart + ADF (depuis headers embarques) */
     if (!load_kickstart()) { Serial.println("STOP: pas de Kickstart."); return; }
-    if (!load_workbench())  Serial.println("ATTENTION: pas de floppy, boot bloque a l'invite disque.");
+    int boot_idx;
+    if (!load_workbench(&boot_idx))
+        Serial.println("ATTENTION: pas de floppy, boot bloque a l'invite disque.");
 
     /* 3. sortie VGA (FabGL) : fixe busiestCore/quietCore et branche denise_line_cb */
     video_vga_init();
+
+    /* bouton IO36 + tache de lecture SD : APRES video_vga_init, qui fixe busiestCore */
+    disk_switch_init(boot_idx);
 
     /* 4. entree PS/2 (souris + clavier). L'audio demarre dans emu_task APRES
      *    paula_reset (le ring Paula doit exister avant la 1ere consommation). */
