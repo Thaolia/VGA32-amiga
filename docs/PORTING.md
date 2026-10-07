@@ -116,6 +116,41 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Jeux : Paula par événements, QIO, -O2, Fast RAM 1,25 Mo (2026-10-07)
+
+Mesures sur Lemmings (démo jouable, ADF embarqué à la place du Workbench pour le profiling), temps
+de calcul moyen par trame en régime (log `=== frame`, trames 800-2000, firmware normal) :
+
+| Étape | ms/trame | fps |
+|---|---|---|
+| Profil initial (env prof) : Paula 27,2 ms, CPU 33,1, Denise 13,8 | ~75 | ~13 |
+| 1. `paula_step` par événements | 53,9 | 18,6 |
+| 2. flash en QIO (`board_build.flash_mode = qio`) | 51,6 | 19,4 |
+| 3. `-O2` au lieu de `-Os` (`build_unflags = -Os`) | **46,6** | **21,5** |
+| (essai) tables de saut réactivées | 47,7 | 21,0, non retenu |
+
+- **Paula** (`core/paula.cpp`) : l'ancienne boucle avançait color clock par color clock (~3,5 M
+  itérations/s × 4 canaux, un `memw` par écriture) ; elle saute maintenant au prochain événement
+  (fin de période d'un canal ou échantillon de sortie). Résultat identique : `tests/pc`
+  `make testpaula` (scénario aléatoire 4 canaux, période nulle, DMA basculé) produit un WAV
+  identique octet pour octet à l'implémentation d'origine (MD5 figé) ; test de mutation détecté ;
+  harnais 60 trames identique. Piège couvert : un canal activé avant l'écriture de PER a `per = 0`
+  et bascule à chaque color clock (pas nul → boucle infinie dans une version naïve).
+- **QIO** : la plateforme garde `--flash_mode dio` dans l'en-tête (boot ROM) et embarque
+  `bootloader_qio_40m.elf`, qui passe la flash en QIO. Vérifié par `psram_diag` : flash lue à
+  **23,0 Mo/s en QIO contre 14,3 Mo/s en DIO**. La puce flash interne de l'ESP32-PICO-D4 le supporte.
+- **-O2** : le framework ajoutait `-Os` après nos drapeaux ; retiré. Flash utilisée 1,33 Mo / 3 Mo.
+- **Tables de saut** (`-fjump-tables`) : pas de gain, et risque si du code IRAM lit une table en
+  flash cache coupé : laissées désactivées.
+- **Profil après ces étapes** (env prof, Lemmings) : CPU 29,7 ms (63 %, dont blitter 6,6),
+  Denise 13,0 (dont calcul des pixels 7,0), Paula 2,1. Prochaines cibles : le 68000 (chemin des
+  accès mémoire), la boucle pixels de Denise (un `memw` par pixel + `color_diag_max_idx`).
+- **Table de cycles Musashi** réduite au 68000 (`M68K_CYCLE_ROWS` dans `third_party/musashi/m68kconf.h`,
+  `m68k_set_cpu_type` ramène tout type au 68000) : **+256 Ko de PSRAM** (107 879 → 370 023 o
+  libres). Utilisés par une **2e carte Fast RAM de 256 Ko** (`VGA32_FASTRAM2_KB`) : Fast RAM totale
+  1,25 Mo. Le Kickstart 1.3 place cette carte en **$EC0000** (zone d'E/S Zorro II), même avec
+  `ERFF_MEMSPACE` (constaté ; raison non documentée ici) : elle y fonctionne et le système l'utilise.
+
 ## Mémoire : Fast RAM Zorro II, PSRAM de 8 Mo, himem (2026-10-07)
 
 **Mesures** (bilan `[MEM]` à la trame 200, firmware normal) : PSRAM libre 1 156 471 o, plus grand

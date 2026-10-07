@@ -40,7 +40,7 @@ int main(void)
     CHECK(rd_reg(0x00) == 0xE5);
     CHECK(rd_reg(0x04) == 0x01);
     CHECK((rd_reg(0x10) << 8 | rd_reg(0x14)) == 0x07DB);
-    CHECK(rd_reg(0x08) == 0x00);                       /* flags */
+    CHECK(rd_reg(0x08) == 0x80);                       /* flags : espace 8 Mo (ERFF_MEMSPACE) */
     CHECK(zorro_page[0x20] == NULL);
 
     configure(0x200000);

@@ -793,6 +793,11 @@ void m68k_set_instr_hook_callback(void  (*callback)(unsigned int pc))
 /* Set the CPU type. */
 void m68k_set_cpu_type(unsigned int cpu_type)
 {
+#if M68K_CYCLE_ROWS == 1
+	/* Portage VGA32 : table de cycles réduite au 68000 (m68kconf.h) ; tout autre type
+	 * pointerait hors de la table. */
+	cpu_type = M68K_CPU_TYPE_68000;
+#endif
 	switch(cpu_type)
 	{
 		case M68K_CPU_TYPE_68000:

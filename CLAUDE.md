@@ -33,8 +33,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
-- Référence (2026-10-07, après optimisations Denise) : bureau au repos **12,3 ms de calcul** par
-  trame, boot trames 50→1350 en 44,5 s, heap interne libre ~154 Ko. Le limiteur plafonne à 50 trames/s :
+- Référence (2026-10-07) : bureau Workbench au repos **12,3 ms de calcul** par trame ; jeu
+  (Lemmings, démo) **46,6 ms** (21,5 fps) ; heap interne libre ~154 Ko. Le limiteur plafonne à 50 trames/s :
   mesurer la perf sur le temps de calcul du log `=== frame` (attente exclue), jamais sur les fps réels.
 - Le temps au repos varie de quelques ms selon la disposition du binaire et l'endroit où l'OS
   place ses données (cache partagé flash/PSRAM, mesuré 12,3 à 19,2 ms) : une variation de cet ordre
@@ -59,6 +59,9 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
   voir `CLAUDE.local.md` (WSL2 : esptool Windows, cf. README).
 - Toolchain figée : `espressif32@6.10.0` → arduino-esp32 **2.0.17** (FabGL + I2S legacy). Ne
   jamais utiliser d'API arduino-esp32 3.x ni monter la plateforme sans le demander.
+- Options de vitesse mesurées, à garder : flash QIO (`board_build.flash_mode = qio`, vérifier
+  `[FLASH]` ≈ 23 Mo/s au boot), `-O2` (`build_unflags = -Os`). Tables de saut : pas de gain, ne pas
+  réactiver. L'API himem d'ESP-IDF fait planter au boot avec ce framework : ne pas la lier.
 - Le firmware ne boote qu'avec `assets/kick_rom.h` et `assets/wb_adf.h` générés depuis les
   fichiers légaux de l'utilisateur (`tools/make_kick_header.py`, `tools/make_adf_header.py`, dossier
   de sortie en 2e arg : `... <fichier> assets`). Un placeholder (zéros) compile mais NE boote PAS —
@@ -112,7 +115,7 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
    testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert ; modif sous `#ifdef ARDUINO`
-   → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk`.
+   → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula`.
    `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.
 2. HAL pure modifiée (`serial_proto`, `disk_select`, `vga_pack`, `zorro`) → `make -C tests/hal test` au vert.

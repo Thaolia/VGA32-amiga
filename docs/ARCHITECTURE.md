@@ -73,8 +73,8 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 `emu_task()` : init cœur (dont `m68k_init` qui alloue les tables Musashi en PSRAM) + boucle trame.
 
 Carte mémoire Amiga : chip RAM 512 Ko ($000000), Fast RAM Zorro II autoconfig (`src/hal/zorro`,
-1 Mo par défaut, configurée par le Kickstart en $200000), slow RAM 512 Ko ($C00000), ROM 256 Ko
-($F80000), tout en PSRAM. `memory.cpp` consulte `zorro_page[a >> 16]` après chip/slow RAM.
+cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kickstart), slow RAM
+512 Ko ($C00000), ROM 256 Ko ($F80000), tout en PSRAM. `memory.cpp` consulte `zorro_page[a >> 16]` après chip/slow RAM.
 
 ## Flux d'une trame
 

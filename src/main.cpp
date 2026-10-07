@@ -239,6 +239,15 @@ static void psram_diag(const uint8_t *buf, size_t len)
     Serial.printf("[PSRAM] lecture seq %u Ko : %lld us (%.1f Mo/s) | 1 lecture/ligne : %.2f us/ligne (chk %08X)\n",
                   (unsigned)(len / 1024), (long long)dt, dt > 0 ? (double)len / dt : 0.0,
                   (double)dl / (len / 32), (unsigned)acc);
+    /* meme mesure sur la flash (Kickstart embarque, 256 Ko de rodata) : ~2x plus rapide en QIO
+     * qu'en DIO, ce qui verifie le mode reellement actif (l'en-tete d'image reste DIO) */
+    const volatile uint32_t *f = (const volatile uint32_t *)kickstart_rom;
+    t = esp_timer_get_time();
+    for (size_t i = 0; i < sizeof(kickstart_rom) / 4; i++) acc += f[i];
+    dt = esp_timer_get_time() - t;
+    Serial.printf("[FLASH] lecture seq %u Ko : %lld us (%.1f Mo/s) (chk %08X)\n",
+                  (unsigned)(sizeof(kickstart_rom) / 1024), (long long)dt,
+                  dt > 0 ? (double)sizeof(kickstart_rom) / dt : 0.0, (unsigned)acc);
 }
 #endif
 
@@ -376,19 +385,23 @@ void setup(void)
 #if VGA32_DEBUG
     psram_diag(chip_ram, CHIP_SIZE);
 #endif
-#if VGA32_FASTRAM_KB
-    /* Fast RAM allouee tot : le bloc contigu n'existe plus une fois l'ADF, les tables Musashi
-     * et le cache de lignes video alloues. Echec non bloquant (Amiga sans extension). */
+    /* Fast RAM allouee tot : les blocs contigus n'existent plus une fois l'ADF, les tables
+     * Musashi et le cache de lignes video alloues. Echec non bloquant (carte absente). La plus
+     * grande d'abord : le Kickstart la place en $200000, la suivante a la suite. */
     {
-        const uint32_t sz = (uint32_t)VGA32_FASTRAM_KB * 1024u;
-        uint8_t *fast = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
-        if (!fast || zorro_add_ram(fast, sz) != 0)
-            Serial.printf("ERREUR: Fast RAM %u Ko non ajoutee (PSRAM ou taille invalide)\n",
-                          (unsigned)VGA32_FASTRAM_KB);
-        else
+        static const unsigned fast_kb[] = { VGA32_FASTRAM_KB, VGA32_FASTRAM2_KB };
+        for (unsigned kb : fast_kb) {
+            if (!kb) continue;
+            const uint32_t sz = (uint32_t)kb * 1024u;
+            uint8_t *fast = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+            if (!fast || zorro_add_ram(fast, sz) != 0) {
+                Serial.printf("ERREUR: Fast RAM %u Ko non ajoutee (PSRAM ou taille invalide)\n", kb);
+                if (fast) heap_caps_free(fast);
+                continue;
+            }
             memset(fast, 0, sz);
+        }
     }
-#endif
 
     /* 2. Kickstart + ADF (depuis headers embarques) */
     if (!load_kickstart()) { Serial.println("STOP: pas de Kickstart."); return; }

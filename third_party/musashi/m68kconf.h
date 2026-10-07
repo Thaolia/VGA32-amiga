@@ -84,6 +84,16 @@
 #define M68K_EMULATE_040            M68K_OPT_OFF
 #endif
 
+/* Portage VGA32 : nombre de lignes de la table de cycles (une par type de CPU, 64 Ko chacune,
+ * en PSRAM). Avec le seul 68000 émulé, une ligne suffit : 256 Ko de PSRAM rendus. */
+#if M68K_EMULATE_010 == M68K_OPT_OFF && M68K_EMULATE_EC020 == M68K_OPT_OFF && \
+    M68K_EMULATE_020 == M68K_OPT_OFF && M68K_EMULATE_030 == M68K_OPT_OFF && \
+    M68K_EMULATE_040 == M68K_OPT_OFF
+#define M68K_CYCLE_ROWS 1
+#else
+#define M68K_CYCLE_ROWS 5
+#endif
+
 
 /* If ON, the CPU will call m68k_read_immediate_xx() for immediate addressing
  * and m68k_read_pcrelative_xx() for PC-relative addressing.

@@ -36395,7 +36395,7 @@ void m68ki_build_opcode_table(void)
 			(void (**)(void))MUSASHI_TBL_ALLOC(sizeof(void (*)(void)) * 0x10000);
 	if(!m68ki_cycles)
 		m68ki_cycles =
-			(unsigned char (*)[0x10000])MUSASHI_TBL_ALLOC((size_t)NUM_CPU_TYPES * 0x10000);
+			(unsigned char (*)[0x10000])MUSASHI_TBL_ALLOC((size_t)M68K_CYCLE_ROWS * 0x10000);
 	if(!m68ki_instruction_jump_table || !m68ki_cycles) {
 		/* printf est route vers UART0 sur arduino-esp32 ; abort() -> panic diagnosable */
 		printf("FATAL: allocation des tables Musashi echouee (PSRAM insuffisante)\n");
@@ -36406,7 +36406,7 @@ void m68ki_build_opcode_table(void)
 	{
 		/* default to illegal */
 		m68ki_instruction_jump_table[i] = m68k_op_illegal;
-		for(k=0;k<NUM_CPU_TYPES;k++)
+		for(k=0;k<M68K_CYCLE_ROWS;k++)
 			m68ki_cycles[k][i] = 0;
 	}
 
@@ -36418,7 +36418,7 @@ void m68ki_build_opcode_table(void)
 			if((i & ostruct->mask) == ostruct->match)
 			{
 				m68ki_instruction_jump_table[i] = ostruct->opcode_handler;
-				for(k=0;k<NUM_CPU_TYPES;k++)
+				for(k=0;k<M68K_CYCLE_ROWS;k++)
 					m68ki_cycles[k][i] = ostruct->cycles[k];
 			}
 		}
@@ -36429,7 +36429,7 @@ void m68ki_build_opcode_table(void)
 		for(i = 0;i <= 0xff;i++)
 		{
 			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
-			for(k=0;k<NUM_CPU_TYPES;k++)
+			for(k=0;k<M68K_CYCLE_ROWS;k++)
 				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
 		}
 		ostruct++;
@@ -36442,7 +36442,7 @@ void m68ki_build_opcode_table(void)
 			{
 				instr = ostruct->match | (i << 9) | j;
 				m68ki_instruction_jump_table[instr] = ostruct->opcode_handler;
-				for(k=0;k<NUM_CPU_TYPES;k++)
+				for(k=0;k<M68K_CYCLE_ROWS;k++)
 					m68ki_cycles[k][instr] = ostruct->cycles[k];
 /* SBF: don't add it here or the costs are added twice!
 				// For all shift operations with known shift distance (encoded in instruction word)
@@ -36466,7 +36466,7 @@ void m68ki_build_opcode_table(void)
 		for(i = 0;i <= 0x0f;i++)
 		{
 			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
-			for(k=0;k<NUM_CPU_TYPES;k++)
+			for(k=0;k<M68K_CYCLE_ROWS;k++)
 				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
 		}
 		ostruct++;
@@ -36476,7 +36476,7 @@ void m68ki_build_opcode_table(void)
 		for(i = 0;i <= 0x07;i++)
 		{
 			m68ki_instruction_jump_table[ostruct->match | (i << 9)] = ostruct->opcode_handler;
-			for(k=0;k<NUM_CPU_TYPES;k++)
+			for(k=0;k<M68K_CYCLE_ROWS;k++)
 				m68ki_cycles[k][ostruct->match | (i << 9)] = ostruct->cycles[k];
 		}
 		ostruct++;
@@ -36486,7 +36486,7 @@ void m68ki_build_opcode_table(void)
 		for(i = 0;i <= 0x07;i++)
 		{
 			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
-			for(k=0;k<NUM_CPU_TYPES;k++)
+			for(k=0;k<M68K_CYCLE_ROWS;k++)
 				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
 		}
 		ostruct++;
@@ -36494,7 +36494,7 @@ void m68ki_build_opcode_table(void)
 	while(ostruct->mask == 0xffff)
 	{
 		m68ki_instruction_jump_table[ostruct->match] = ostruct->opcode_handler;
-		for(k=0;k<NUM_CPU_TYPES;k++)
+		for(k=0;k<M68K_CYCLE_ROWS;k++)
 			m68ki_cycles[k][ostruct->match] = ostruct->cycles[k];
 		ostruct++;
 	}

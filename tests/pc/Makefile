@@ -49,7 +49,7 @@ test/testrom.bin: test/mkrom.py
 	python3 test/mkrom.py $@
 
 clean:
-	rm -rf a500 obj tjoy tdisk test/testrom.bin
+	rm -rf a500 obj tjoy tdisk tpaula test/testrom.bin
 
 .PHONY: test testvideo testblit testboot testmfm clean
 
@@ -91,6 +91,14 @@ testjoy:
 testdisk:
 	g++ -I$(CORE) -o tdisk test/test_disk_c.cpp $(CORE)/disk.cpp
 	./tdisk
+
+# Paula : WAV d'un scénario aléatoire figé, comparé à l'empreinte de l'implémentation d'origine
+# (avance color clock par color clock, avant le pilotage par événements).
+PAULA_REF_MD5 = 842c9f98f76d43720f661151d69afc31
+testpaula:
+	g++ -O2 -I$(CORE) -o tpaula test/test_paula_c.cpp $(CORE)/paula.cpp
+	./tpaula test_paula.wav
+	@test "$$(md5sum test_paula.wav | cut -d' ' -f1)" = "$(PAULA_REF_MD5)" && echo "OK  paula : WAV identique a la reference" || (echo "FAIL paula : WAV different de la reference"; exit 1)
 
 testaudio: a500
 	python3 test/mkrom_audio.py test/testrom_audio.bin

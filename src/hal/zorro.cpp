@@ -9,6 +9,9 @@
 #define ZORRO_PRODUCT      0x01u
 #define ERT_ZORROII        0xC0u
 #define ERTF_MEMLIST       0x20u
+/* er_Flags : placer la carte dans l'espace 8 Mo ($200000-$9FFFFF). Sans ce bit, le Kickstart
+ * range une carte de 512 Ko ou moins dans la zone d'E/S $E90000-$EFFFFF (constaté : $EC0000). */
+#define ERFF_MEMSPACE      0x80u
 
 typedef struct {
     uint8_t  *mem;
@@ -75,11 +78,13 @@ static uint8_t reg_nibble(const board_t *b, uint32_t off)
     case 0x02: return type & 0xF;
     case 0x04: return ZORRO_PRODUCT >> 4;
     case 0x06: return ZORRO_PRODUCT & 0xF;
+    case 0x08: return ERFF_MEMSPACE >> 4;
+    case 0x0A: return ERFF_MEMSPACE & 0xF;
     case 0x10: return (ZORRO_MANUFACTURER >> 12) & 0xF;
     case 0x12: return (ZORRO_MANUFACTURER >> 8) & 0xF;
     case 0x14: return (ZORRO_MANUFACTURER >> 4) & 0xF;
     case 0x16: return ZORRO_MANUFACTURER & 0xF;
-    default:   return 0;   /* flags, numéro de série, vecteur diag : 0 */
+    default:   return 0;   /* numéro de série, vecteur diag : 0 */
     }
 }
 

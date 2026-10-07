@@ -156,6 +156,32 @@ static int8_t fetch_sample(int c)
    incremento per colorclock = OUT_RATE/PAL_COLORCLOCK in fixed-point 16.16 */
 #define RESAMP_FIX ((uint32_t)((44100.0 / 3546895.0) * 65536.0 + 0.5))
 
+/* Portage VGA32 : mixage d'un échantillon de sortie (inchangé), sorti de la boucle. */
+static inline void paula_emit(void)
+{
+#ifndef ARDUINO
+    if (out_n < AUD_BUFMAX) {
+        int l = (ch[0].sample * ch[0].vol + ch[3].sample * ch[3].vol);
+        int r = (ch[1].sample * ch[1].vol + ch[2].sample * ch[2].vol);
+        l = l * 2; r = r * 2;
+        if (l > 32767) l = 32767; if (l < -32768) l = -32768;
+        if (r > 32767) r = 32767; if (r < -32768) r = -32768;
+        out_l[out_n] = (int16_t)l; out_r[out_n] = (int16_t)r;
+        out_n++;
+    }
+#else
+    int l = (ch[0].sample * ch[0].vol + ch[3].sample * ch[3].vol) * 2;
+    int r = (ch[1].sample * ch[1].vol + ch[2].sample * ch[2].vol) * 2;
+    if (l > 32767) l = 32767; if (l < -32768) l = -32768;
+    if (r > 32767) r = 32767; if (r < -32768) r = -32768;
+    if (ring_l && ring_r && ring_free() > 1) {
+        uint32_t i = ring_wr & RING_MASK;
+        ring_l[i] = (int16_t)l; ring_r[i] = (int16_t)r;
+        ring_wr++;
+    }
+#endif
+}
+
 void paula_step(int colorclocks)
 {
 #ifdef ARDUINO
@@ -166,42 +192,36 @@ void paula_step(int colorclocks)
     if (audio_on == 0) return;
 #endif
 
-    for (int t = 0; t < colorclocks; t++) {
+    /* Portage VGA32 : pilotage par événements, résultat identique à l'avance color clock par
+     * color clock (vérifié : make testpaula, WAV identique octet pour octet). On saute
+     * directement au prochain événement : un canal arrive au bout de sa période (percnt color
+     * clocks ; percnt <= 0, cas d'une période nulle, bascule au color clock suivant) ou
+     * l'accumulateur de rééchantillonnage franchit 1 (échantillon de sortie, mixé APRÈS les
+     * canaux du même color clock). Mesuré sur Lemmings : 27 ms/trame dans l'ancienne boucle
+     * (~3,5 M itérations/s × 4 canaux, chaque écriture suivie d'un memw). */
+    int left = colorclocks;
+    while (left > 0) {
+        int step = (int)((65536u - out_acc_fix + RESAMP_FIX - 1) / RESAMP_FIX);
         for (int c = 0; c < 4; c++) {
             if (!((audio_on >> c) & 1)) continue;
-            if (--ch[c].percnt <= 0) {
+            int due = ch[c].percnt < 1 ? 1 : ch[c].percnt;
+            if (due < step) step = due;
+        }
+        if (step > left) step = left;
+        for (int c = 0; c < 4; c++) {
+            if (!((audio_on >> c) & 1)) continue;
+            ch[c].percnt -= step;
+            if (ch[c].percnt <= 0) {
                 ch[c].percnt = ch[c].per;
                 ch[c].sample = fetch_sample(c);
             }
         }
-        /* resampling a punto fisso: niente float nel loop */
-        out_acc_fix += RESAMP_FIX;
+        out_acc_fix += (uint32_t)step * RESAMP_FIX;
         if (out_acc_fix >= 65536) {
             out_acc_fix -= 65536;
-#ifndef ARDUINO
-            if (out_n < AUD_BUFMAX) {
-                int l = (ch[0].sample * ch[0].vol + ch[3].sample * ch[3].vol);
-                int r = (ch[1].sample * ch[1].vol + ch[2].sample * ch[2].vol);
-                l = l * 2; r = r * 2;
-                if (l > 32767) l = 32767; if (l < -32768) l = -32768;
-                if (r > 32767) r = 32767; if (r < -32768) r = -32768;
-                out_l[out_n] = (int16_t)l; out_r[out_n] = (int16_t)r;
-                out_n++;
-            }
-#else
-            {
-                int l = (ch[0].sample * ch[0].vol + ch[3].sample * ch[3].vol) * 2;
-                int r = (ch[1].sample * ch[1].vol + ch[2].sample * ch[2].vol) * 2;
-                if (l > 32767) l = 32767; if (l < -32768) l = -32768;
-                if (r > 32767) r = 32767; if (r < -32768) r = -32768;
-                if (ring_l && ring_r && ring_free() > 1) {
-                    uint32_t i = ring_wr & RING_MASK;
-                    ring_l[i] = (int16_t)l; ring_r[i] = (int16_t)r;
-                    ring_wr++;
-                }
-            }
-#endif
+            paula_emit();
         }
+        left -= step;
     }
 }
 

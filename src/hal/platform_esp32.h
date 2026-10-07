@@ -88,11 +88,14 @@
 #endif
 
 /* ---- Fast RAM Zorro II (autoconfig, src/hal/zorro) ----
- * Cartes de RAM ajoutées par le Kickstart à la liste mémoire, prises en PSRAM au boot. Taille
- * en Ko, puissance de 2 (64 à 8192) ; 0 = aucune. 1024 : le plus grand bloc PSRAM libre une fois
- * tout alloué faisait 1 146 868 o (mesuré 2026-10-07). */
+ * Deux cartes de RAM ajoutées par le Kickstart à la liste mémoire, prises en PSRAM au boot. Taille
+ * en Ko, puissance de 2 (64 à 8192) ; 0 = absente. Budget mesuré (2026-10-07) : 1 146 868 o libres
+ * une fois tout alloué, +256 Ko avec la table de cycles Musashi réduite au 68000 -> 1024 + 256. */
 #ifndef VGA32_FASTRAM_KB
-#define VGA32_FASTRAM_KB  1024
+#define VGA32_FASTRAM_KB   1024
+#endif
+#ifndef VGA32_FASTRAM2_KB
+#define VGA32_FASTRAM2_KB  256
 #endif
 
 /* ---- Limiteur de vitesse ----

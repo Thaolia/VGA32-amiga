@@ -21,6 +21,7 @@ tests/pc/test/testrom*.bin
 tests/pc/obj/
 tests/pc/tjoy
 tests/pc/tdisk
+tests/pc/tpaula
 
 # ---- Config locale Claude Code ----
 .claude/
