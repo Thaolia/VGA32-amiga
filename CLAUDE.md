@@ -34,7 +34,10 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
 - Référence (2026-10-07) : bureau Workbench au repos **8,5 ms de calcul** par trame ; jeu
-  (Lemmings, démo) **37,1 ms** (26,9 fps) ; heap interne libre ~154 Ko.
+  (Lemmings, démo) **35,9 ms** (27,8 fps) ; heap interne libre ~154 Ko.
+- Musashi est compilé SANS le contournement PSRAM (library.json) : il ne doit JAMAIS écrire
+  directement en PSRAM. Toute nouvelle écriture vers une zone PSRAM depuis third_party/musashi passe
+  par une fonction hors de la bibliothèque (modèle : src/hal/musashi_tables.c), puis stress + CRC.
 - Changement du 68000 ou de la mémoire (memory.cpp, cia.cpp, Musashi) : valider par l'env
   `ttgo-vga32-stress` (CRC de la RAM Amiga identiques à la référence aux mêmes trames), en plus des
   sentinelles PC.

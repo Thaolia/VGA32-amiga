@@ -5,6 +5,7 @@
   "license": "MIT",
   "build": {
     "srcFilter": ["-<*>", "+<m68kcpu.c>", "+<m68kops.c>", "+<softfloat/softfloat.c>"],
-    "flags": ["-I."]
+    "flags": ["-I."],
+    "unflags": ["-mfix-esp32-psram-cache-issue"]
   }
 }

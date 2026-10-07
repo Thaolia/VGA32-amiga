@@ -34390,6 +34390,10 @@ static void m68k_op_unpk_16_mm(void)
 #endif
 
 void  (**m68ki_instruction_jump_table)(void) = 0; /* opcode handler jump table */
+/* Portage VGA32 : écritures des tables (PSRAM) déléguées à src/hal/musashi_tables.c, compilé avec
+ * le contournement PSRAM rev1 dont cette bibliothèque est privée (library.json). */
+void m68k_tbl_jump_set(unsigned op, void (*handler)(void));
+void m68k_tbl_cycle_set(unsigned row, unsigned op, unsigned char cycles);
 unsigned char (*m68ki_cycles)[0x10000] = 0;        /* Cycles used by CPU type */
 
 /* This is used to generate the opcode handler jump table */
@@ -36405,9 +36409,9 @@ void m68ki_build_opcode_table(void)
 	for(i = 0; i < 0x10000; i++)
 	{
 		/* default to illegal */
-		m68ki_instruction_jump_table[i] = m68k_op_illegal;
+		m68k_tbl_jump_set(i, m68k_op_illegal);
 		for(k=0;k<M68K_CYCLE_ROWS;k++)
-			m68ki_cycles[k][i] = 0;
+			m68k_tbl_cycle_set(k, i, 0);
 	}
 
 	ostruct = m68k_opcode_handler_table;
@@ -36417,9 +36421,9 @@ void m68ki_build_opcode_table(void)
 		{
 			if((i & ostruct->mask) == ostruct->match)
 			{
-				m68ki_instruction_jump_table[i] = ostruct->opcode_handler;
+				m68k_tbl_jump_set(i, ostruct->opcode_handler);
 				for(k=0;k<M68K_CYCLE_ROWS;k++)
-					m68ki_cycles[k][i] = ostruct->cycles[k];
+					m68k_tbl_cycle_set(k, i, ostruct->cycles[k]);
 			}
 		}
 		ostruct++;
@@ -36428,9 +36432,9 @@ void m68ki_build_opcode_table(void)
 	{
 		for(i = 0;i <= 0xff;i++)
 		{
-			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
+			m68k_tbl_jump_set(ostruct->match | i, ostruct->opcode_handler);
 			for(k=0;k<M68K_CYCLE_ROWS;k++)
-				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
+				m68k_tbl_cycle_set(k, ostruct->match | i, ostruct->cycles[k]);
 		}
 		ostruct++;
 	}
@@ -36441,9 +36445,9 @@ void m68ki_build_opcode_table(void)
 			for(j = 0;j < 8;j++)
 			{
 				instr = ostruct->match | (i << 9) | j;
-				m68ki_instruction_jump_table[instr] = ostruct->opcode_handler;
+				m68k_tbl_jump_set(instr, ostruct->opcode_handler);
 				for(k=0;k<M68K_CYCLE_ROWS;k++)
-					m68ki_cycles[k][instr] = ostruct->cycles[k];
+					m68k_tbl_cycle_set(k, instr, ostruct->cycles[k]);
 /* SBF: don't add it here or the costs are added twice!
 				// For all shift operations with known shift distance (encoded in instruction word)
 				if((instr & 0xf000) == 0xe000 && (!(instr & 0x20)))
@@ -36465,9 +36469,9 @@ void m68ki_build_opcode_table(void)
 	{
 		for(i = 0;i <= 0x0f;i++)
 		{
-			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
+			m68k_tbl_jump_set(ostruct->match | i, ostruct->opcode_handler);
 			for(k=0;k<M68K_CYCLE_ROWS;k++)
-				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
+				m68k_tbl_cycle_set(k, ostruct->match | i, ostruct->cycles[k]);
 		}
 		ostruct++;
 	}
@@ -36475,9 +36479,9 @@ void m68ki_build_opcode_table(void)
 	{
 		for(i = 0;i <= 0x07;i++)
 		{
-			m68ki_instruction_jump_table[ostruct->match | (i << 9)] = ostruct->opcode_handler;
+			m68k_tbl_jump_set(ostruct->match | (i << 9), ostruct->opcode_handler);
 			for(k=0;k<M68K_CYCLE_ROWS;k++)
-				m68ki_cycles[k][ostruct->match | (i << 9)] = ostruct->cycles[k];
+				m68k_tbl_cycle_set(k, ostruct->match | (i << 9), ostruct->cycles[k]);
 		}
 		ostruct++;
 	}
@@ -36485,17 +36489,17 @@ void m68ki_build_opcode_table(void)
 	{
 		for(i = 0;i <= 0x07;i++)
 		{
-			m68ki_instruction_jump_table[ostruct->match | i] = ostruct->opcode_handler;
+			m68k_tbl_jump_set(ostruct->match | i, ostruct->opcode_handler);
 			for(k=0;k<M68K_CYCLE_ROWS;k++)
-				m68ki_cycles[k][ostruct->match | i] = ostruct->cycles[k];
+				m68k_tbl_cycle_set(k, ostruct->match | i, ostruct->cycles[k]);
 		}
 		ostruct++;
 	}
 	while(ostruct->mask == 0xffff)
 	{
-		m68ki_instruction_jump_table[ostruct->match] = ostruct->opcode_handler;
+		m68k_tbl_jump_set(ostruct->match, ostruct->opcode_handler);
 		for(k=0;k<M68K_CYCLE_ROWS;k++)
-			m68ki_cycles[k][ostruct->match] = ostruct->cycles[k];
+			m68k_tbl_cycle_set(k, ostruct->match, ostruct->cycles[k]);
 		ostruct++;
 	}
 }

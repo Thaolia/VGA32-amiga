@@ -142,10 +142,17 @@ BLTSIZE) ; « reste » (décodage + exécution hors mémoire) 14,4 ms, soit ~310
 ~270 cycles par instruction), Denise 7,7, Paula 2,2. Le « reste » s'explique par l'état du 68000
 (registres, drapeaux N/Z/V/C/X séparés, PC, IR, cycles) stocké en mémoire : chaque mise à jour est une
 écriture suivie d'un `memw`. Musashi n'écrit jamais directement en PSRAM pendant l'émulation (les
-accès Amiga passent par `memory.cpp` ; seules les tables sont écrites, une fois, à l'init) : le compiler
-sans `-mfix-esp32-psram-cache-issue` (`unflags` dans `third_party/musashi/library.json`) supprimerait
-ces barrières. **Piste la plus prometteuse, non faite** : à valider par stress + CRC (risque de
-corruption silencieuse sur puce rev1 si une écriture PSRAM échappait à l'analyse).
+accès Amiga passent par `memory.cpp` ; seules les tables sont écrites, une fois, à l'init).
+
+**Musashi sans contournement PSRAM (fait)** : `third_party/musashi/library.json` retire
+`-mfix-esp32-psram-cache-issue` ; les 16 écritures des tables (`m68ki_build_opcode_table`) passent par
+`m68k_tbl_jump_set/m68k_tbl_cycle_set` (`src/hal/musashi_tables.c`, compilé AVEC le contournement).
+Vérifié dans l'ELF : 0 `memw` dans `m68k_execute` et tous les `m68k_op_*`, `memw` conservés dans
+`memory.cpp` et les deux fonctions de tables. Endurance : 2 runs stress + CRC de 150 s, CRC identiques à
+la référence aux 5 points, 0 erreur sur ~6 300 passes chacun. Lemmings **37,1 → 35,9 ms (27,8 fps)**.
+Gain plus faible qu'attendu : les `memw` n'étaient qu'une petite part du « reste ». Suspect suivant :
+les 2 043 handlers `m68k_op_*` (153 Ko en flash, mesuré) lus via le cache de 32 Ko partagé avec la
+PSRAM ; piste : histogramme des opcodes (env prof), handlers les plus fréquents en IRAM (~40 Ko libres).
 
 **Rendu Denise sur le cœur 1 (étude, non fait)** : déplaçable = conversion des pixels (1,85 ms),
 sprites, envoi VGA (2,38 ms) ; reste sur le cœur 0 = lecture des bitplanes, décision de saut,

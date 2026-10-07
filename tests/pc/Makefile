@@ -19,7 +19,7 @@ CORE     = ../../src/core
 CORE_SRC = memory cia custom drive video blitter disk input paula
 MUSASHI  = obj/m68k/m68kcpu.o obj/m68k/m68kops.o obj/m68k/m68kdasm.o obj/m68k/softfloat/softfloat.o
 HAL      = ../../src/hal
-OBJS     = obj/main.o $(CORE_SRC:%=obj/%.o) obj/zorro.o
+OBJS     = obj/main.o $(CORE_SRC:%=obj/%.o) obj/zorro.o obj/musashi_tables.o
 
 a500: $(OBJS) $(MUSASHI)
 	$(CXX) -o $@ $^
@@ -34,6 +34,10 @@ obj/main.o: src/main.cpp $(CORE)/a500.h | obj
 
 obj/%.o: $(CORE)/%.cpp $(CORE)/a500.h | obj
 	$(CXX) $(CXXFLAGS) -I$(CORE) -I$(HAL) -c -o $@ $<
+
+# écritures des tables Musashi (compilées hors de la bibliothèque, voir le fichier)
+obj/musashi_tables.o: $(HAL)/musashi_tables.c | obj
+	$(CC) -O2 -c -o $@ $<
 
 # module pur de la couche HAL utilisé par le cœur (Fast RAM Zorro II, aucune carte sur PC)
 obj/zorro.o: $(HAL)/zorro.cpp $(HAL)/zorro.h | obj
