@@ -26,6 +26,19 @@ int disk_irq_pending = 0;
 static uint8_t rev[REV_BYTES];        /* una rivoluzione MFM della traccia */
 static int rev_track = -1;            /* traccia attualmente codificata    */
 
+/* Portage VGA32 : rotation continue du disque (docs/FLOPPY_SPEC.md §A1-A3). Cellule MFM de
+ * 7 CCK, ligne PAL de 227,5 CCK : 32,5 bits = 65/32 mots par ligne. Le temps émulé est
+ * cur_frame * 312 + vpos lignes ; la rotation ne s'arrête pas avec le moteur (simplification
+ * sans effet observable : la position de départ d'une lecture reste quelconque). */
+#define REV_WORDS (REV_BYTES / 2)
+static_assert(REV_BYTES % 2 == 0, "revolution MFM non alignee sur les mots");
+static uint32_t head_word(void)
+{
+    const uint64_t lines = (uint64_t)(uint32_t)cur_frame * 312u + (uint32_t)vpos;
+    return (uint32_t)((lines * 65u / 32u) % REV_WORDS);
+}
+static inline uint16_t rev_word(uint32_t w) { return (uint16_t)(rev[2 * w] << 8 | rev[2 * w + 1]); }
+
 /* ---- encoder MFM a livello di bit ---- */
 static uint8_t *mp;                   /* puntatore di scrittura nel buffer */
 static uint32_t mbits;                /* accumulatore bit                  */
@@ -151,8 +164,25 @@ void disk_dsklen_write(uint16_t v)
     }
     int track = drive_track() * 2 + drive_side();
     if (rev_track != track) build_revolution(track);
-    for (int i = 0; i < len * 2; i++)
-        chip_ram[(pt + (uint32_t)i) & 0x7FFFF] = rev[i % REV_BYTES];
+    /* Portage VGA32 (docs/FLOPPY_SPEC.md §A3, B5, B6) : la lecture part du mot sous la tête,
+     * pas du début de la piste ; avec WORDSYNC, elle commence juste après le prochain mot
+     * DSKSYNC (non stocké). Pas de sync sur la piste : le DMA ne finit jamais, pas de DSKBLK. */
+    uint32_t w = head_word();
+    if (adkcon & 0x0400) {                                /* ADKCON WORDSYNC */
+        const uint16_t sync = custom_get(0x07E);
+        uint32_t i = 1;                                   /* un sync déjà présent ne compte pas */
+        while (i <= REV_WORDS && rev_word((w + i) % REV_WORDS) != sync) i++;
+        if (i > REV_WORDS) {
+            logmsg("[DSK] WORDSYNC : sync %04X absent de la piste %d, DMA en attente\n", sync, track);
+            return;
+        }
+        w = (w + i + 1) % REV_WORDS;
+    }
+    for (int k = 0; k < len; k++) {
+        const uint32_t s = (w + (uint32_t)k) % REV_WORDS;
+        chip_ram[(pt + 2u * (uint32_t)k) & 0x7FFFF]      = rev[2 * s];
+        chip_ram[(pt + 2u * (uint32_t)k + 1u) & 0x7FFFF] = rev[2 * s + 1];
+    }
     logmsg("[DSK] lettura traccia %d (cil %d lato %d): %d word -> %05X, DSKBLK\n",
            track, drive_track(), drive_side(), len, pt);
     disk_irq_pending = 1;                                 /* DSKBLK differito */

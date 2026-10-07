@@ -72,6 +72,10 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 `emu_task` sur `quietCore()`. `loop()` idle. `emu_task` sonde la souris (`input_ps2_poll`) chaque trame.
 `emu_task()` : init cœur (dont `m68k_init` qui alloue les tables Musashi en PSRAM) + boucle trame.
 
+Carte mémoire Amiga : chip RAM 512 Ko ($000000), Fast RAM Zorro II autoconfig (`src/hal/zorro`,
+1 Mo par défaut, configurée par le Kickstart en $200000), slow RAM 512 Ko ($C00000), ROM 256 Ko
+($F80000), tout en PSRAM. `memory.cpp` consulte `zorro_page[a >> 16]` après chip/slow RAM.
+
 ## Flux d'une trame
 
 1. `emu_task` : `input_ps2_poll` → `input_frame` → `copper_vblank` → `sprite_vblank`.

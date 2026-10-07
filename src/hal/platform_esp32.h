@@ -87,6 +87,14 @@
 #define VGA32_DEBUG   1
 #endif
 
+/* ---- Fast RAM Zorro II (autoconfig, src/hal/zorro) ----
+ * Cartes de RAM ajoutées par le Kickstart à la liste mémoire, prises en PSRAM au boot. Taille
+ * en Ko, puissance de 2 (64 à 8192) ; 0 = aucune. 1024 : le plus grand bloc PSRAM libre une fois
+ * tout alloué faisait 1 146 868 o (mesuré 2026-10-07). */
+#ifndef VGA32_FASTRAM_KB
+#define VGA32_FASTRAM_KB  1024
+#endif
+
 /* ---- Limiteur de vitesse ----
  * Un A500 PAL affiche 50 trames/s : plus vite, le temps Amiga s'accélère (horloge, souris,
  * audio produit plus vite que le DAC ne le consomme). 1 = jamais plus de 50 trames/s. */

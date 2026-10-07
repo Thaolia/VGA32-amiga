@@ -18,7 +18,8 @@ CXXFLAGS = $(CFLAGS) -Wall -Wextra
 CORE     = ../../src/core
 CORE_SRC = memory cia custom drive video blitter disk input paula
 MUSASHI  = obj/m68k/m68kcpu.o obj/m68k/m68kops.o obj/m68k/m68kdasm.o obj/m68k/softfloat/softfloat.o
-OBJS     = obj/main.o $(CORE_SRC:%=obj/%.o)
+HAL      = ../../src/hal
+OBJS     = obj/main.o $(CORE_SRC:%=obj/%.o) obj/zorro.o
 
 a500: $(OBJS) $(MUSASHI)
 	$(CXX) -o $@ $^
@@ -29,10 +30,14 @@ obj/m68k/%.o: $(M68KDIR)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
 
 obj/main.o: src/main.cpp $(CORE)/a500.h | obj
-	$(CXX) $(CXXFLAGS) -I$(CORE) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -I$(CORE) -I$(HAL) -c -o $@ $<
 
 obj/%.o: $(CORE)/%.cpp $(CORE)/a500.h | obj
-	$(CXX) $(CXXFLAGS) -I$(CORE) -c -o $@ $<
+	$(CXX) $(CXXFLAGS) -I$(CORE) -I$(HAL) -c -o $@ $<
+
+# module pur de la couche HAL utilisé par le cœur (Fast RAM Zorro II, aucune carte sur PC)
+obj/zorro.o: $(HAL)/zorro.cpp $(HAL)/zorro.h | obj
+	$(CXX) $(CXXFLAGS) -I$(HAL) -c -o $@ $<
 
 obj:
 	mkdir -p obj
@@ -44,7 +49,7 @@ test/testrom.bin: test/mkrom.py
 	python3 test/mkrom.py $@
 
 clean:
-	rm -rf a500 obj tjoy test/testrom.bin
+	rm -rf a500 obj tjoy tdisk test/testrom.bin
 
 .PHONY: test testvideo testblit testboot testmfm clean
 
@@ -82,6 +87,10 @@ testjoy:
 	g++ -I$(CORE) -o tjoy test/test_joy_c.cpp $(CORE)/input.cpp
 	./tjoy
 	python3 test/check_joy.py
+
+testdisk:
+	g++ -I$(CORE) -o tdisk test/test_disk_c.cpp $(CORE)/disk.cpp
+	./tdisk
 
 testaudio: a500
 	python3 test/mkrom_audio.py test/testrom_audio.bin

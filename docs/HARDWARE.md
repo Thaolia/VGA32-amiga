@@ -7,7 +7,7 @@
   **CH9102** (1a86:55d4, `/dev/ttyACM0` sous Linux) — d'autres lots ont un CP2104.
   La PSRAM est **obligatoire** (l'émulateur alloue ~2,4 Mo). Les révisions sans PSRAM (v1.2,
   WROOM) ne conviennent pas.
-- **PSRAM** : QSPI (quad) — ~4 Mo adressables. Bande passante nettement inférieure à l'OPI octal
+- **PSRAM** : QSPI (quad), puce de 8 Mo (64 Mbit, mesuré : `[MEM]` au boot) dont l'ESP32 n'adresse que 4 Mo. Bande passante nettement inférieure à l'OPI octal
   du S3 d'origine : c'est le facteur limitant du framerate.
 - **Connecteurs** : VGA DB15, 2× PS/2 (clavier + souris), **slot microSD embarqué**, jack audio
   3.5 mm + ampli + haut-parleur (embarqués), micro-USB (CP2104, prog/alim), connecteur batterie

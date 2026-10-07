@@ -9,6 +9,7 @@
  * Il Kickstart imposta DDRA bit0=1 e PRA bit0=0 -> overlay rimosso.
  */
 #include "a500.h"
+#include "zorro.h"     /* portage VGA32 : Fast RAM Zorro II autoconfig (src/hal/zorro) */
 #include <string.h>
 #include <stdarg.h>
 extern "C" {
@@ -67,6 +68,7 @@ void mem_reset(void)
        solo 4/8 byte. Serve sempre la dimensione reale della Chip RAM. */
     if (chip_ram) memset(chip_ram, 0, CHIP_SIZE);
     if (slow_ram) memset(slow_ram, 0, SLOW_SIZE);
+    zorro_reset();     /* cartes d'extension non configurées : le Kickstart les reconfigure */
     ovl = 1;
 }
 
@@ -88,6 +90,7 @@ static uint8_t read8(uint32_t a)
     a &= 0xFFFFFF;
     if (a < CHIP_SIZE)  return ovl ? rom_b(a) : chip_ram[a];
     if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) return slow_ram[a - SLOW_BASE];
+    { const uint8_t *z = zorro_page[a >> 16]; if (z) return z[a & 0xFFFF]; }
     if (a >= 0xF80000)  return rom_b(a);
     if ((a & 0xFFF000) == 0xBFE000 && (a & 1)) return cia_read(&cia_a, (a >> 8) & 0xF);
     if ((a & 0xFFF000) == 0xBFD000 && !(a & 1)) return cia_read(&cia_b, (a >> 8) & 0xF);
@@ -95,6 +98,7 @@ static uint8_t read8(uint32_t a)
         uint16_t w = custom_read(a & 0x1FE);
         return (a & 1) ? (uint8_t)w : (uint8_t)(w >> 8);
     }
+    if ((a & 0xFF0000) == ZORRO_CFG_BASE) { uint8_t v; if (zorro_cfg_read8(a, &v)) return v; }
     unmapped("R8", a);
     return 0;
 }
@@ -104,6 +108,7 @@ static void write8(uint32_t a, uint8_t v)
     a &= 0xFFFFFF;
     if (a < CHIP_SIZE) { if (!ovl) chip_ram[a] = v; return; }  /* scritture in overlay ignorate */
     if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) { slow_ram[a - SLOW_BASE] = v; return; }
+    { uint8_t *z = zorro_page[a >> 16]; if (z) { z[a & 0xFFFF] = v; return; } }
     if ((a & 0xFFF000) == 0xBFE000 && (a & 1)) { cia_write(&cia_a, (a >> 8) & 0xF, v); return; }
     if ((a & 0xFFF000) == 0xBFD000 && !(a & 1)) { cia_write(&cia_b, (a >> 8) & 0xF, v); return; }
     if ((a & 0xFFF000) == 0xDFF000) {
@@ -113,6 +118,7 @@ static void write8(uint32_t a, uint8_t v)
         return;
     }
     if (a >= 0xF80000) return;  /* ROM: scritture ignorate */
+    if ((a & 0xFF0000) == ZORRO_CFG_BASE && zorro_cfg_write8(a, v)) return;
     unmapped("W8", a);
 }
 
@@ -135,6 +141,10 @@ unsigned int m68k_read_memory_16(unsigned int a)
         const uint8_t *p = &slow_ram[a - SLOW_BASE];
         return (unsigned)p[0] << 8 | p[1];
     }
+    {   /* Fast RAM : a pair, donc a+1 reste dans la même page de 64 Ko */
+        const uint8_t *z = zorro_page[a >> 16];
+        if (z) { z += a & 0xFFFF; return (unsigned)z[0] << 8 | z[1]; }
+    }
     if ((a & 0xFFF000) == 0xDFF000) return custom_read(a & 0x1FE);
     return (unsigned)read8(a) << 8 | read8(a + 1);
 }
@@ -152,6 +162,10 @@ void m68k_write_memory_16(unsigned int a, unsigned int v)
     if (a < CHIP_SIZE) {
         if (!ovl) { chip_ram[a] = (uint8_t)(v >> 8); chip_ram[a + 1] = (uint8_t)v; }
         return;
+    }
+    {
+        uint8_t *z = zorro_page[a >> 16];
+        if (z) { z += a & 0xFFFF; z[0] = (uint8_t)(v >> 8); z[1] = (uint8_t)v; return; }
     }
     if ((a & 0xFFF000) == 0xDFF000) { custom_write(a & 0x1FE, (uint16_t)v); return; }
     write8(a, (uint8_t)(v >> 8)); write8(a + 1, (uint8_t)v);

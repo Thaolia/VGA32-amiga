@@ -20,6 +20,7 @@ tests/pc/boot_check.txt
 tests/pc/test/testrom*.bin
 tests/pc/obj/
 tests/pc/tjoy
+tests/pc/tdisk
 
 # ---- Config locale Claude Code ----
 .claude/
@@ -34,6 +35,7 @@ credentials*
 tests/hal/test_serial_proto
 tests/hal/test_disk_select
 tests/hal/test_vga_pack
+tests/hal/test_zorro
 __pycache__/
 
 # ---- Config Claude Code locale à la machine ----

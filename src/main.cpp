@@ -20,6 +20,7 @@
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
 #include "soc/spi_reg.h"
+#include "esp32/spiram.h"
 
 #include "platform_esp32.h"
 #include "video_vga.h"
@@ -29,6 +30,7 @@
 #include "sdcard.h"
 #include "disk_switch.h"
 #include "serial_kbd.h"
+#include "zorro.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
 /* inconditionnel : le LDF PlatformIO (deep+) ne voit pas VGA32_EMBED_ADF et retirerait
@@ -306,6 +308,33 @@ static void emu_task(void *arg)
         PROF_MARK(P_POST);
 
 #if VGA32_DEBUG
+        if (cur_frame == 200) {
+            /* bilan memoire une fois tout alloue (tables Musashi, cache de lignes video) */
+            /* taille physique de la puce (ID lu a l'init) ; l'ESP32 n'en adresse que 4 Mo.
+             * Pas d'API himem : son constructeur global s'execute avant l'init PSRAM
+             * paresseuse d'arduino-esp32 2.x et fait abort() (mesure). */
+            static const unsigned chip_mbit[] = { 16, 32, 64 };
+            esp_spiram_size_t cs = esp_spiram_get_chip_size();
+            Serial.printf("[MEM] PSRAM libre %u o, plus grand bloc %u o | puce %u Mbit (%u Mo)\n",
+                          (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+                          (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM),
+                          cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] : 0,
+                          cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] / 8 : 0);
+        }
+        if (cur_frame == 200 || cur_frame == 1000) {
+            /* cartes Zorro : base attribuee par le Kickstart, et part de la Fast RAM deja
+             * touchee par le systeme (pages de 4 Ko non nulles) */
+            for (int b = 0; b < zorro_board_count(); b++) {
+                uint32_t base = zorro_board_base(b), size = zorro_board_size(b), used = 0;
+                for (uint32_t pg = 0; base && pg < size; pg += 4096) {
+                    const uint32_t *w = (const uint32_t *)(zorro_page[(base + pg) >> 16] + ((base + pg) & 0xFFFF));
+                    for (int k = 0; k < 1024; k++) if (w[k]) { used++; break; }
+                }
+                Serial.printf("[ZORRO] trame %d : carte %d, %u Ko, %s%06X, %u/%u pages de 4 Ko utilisees\n",
+                              cur_frame, b, (unsigned)(size / 1024), base ? "base $" : "NON configuree ",
+                              (unsigned)base, (unsigned)used, (unsigned)(size / 4096));
+            }
+        }
         if ((cur_frame % 50) == 0) {
             int64_t dt = esp_timer_get_time() - t0;
             Serial.printf("=== frame %d: %lld us (%.1f fps) | heap int %u o | psram %u o ===\n",
@@ -346,6 +375,19 @@ void setup(void)
     memset(slow_ram, 0, SLOW_SIZE);
 #if VGA32_DEBUG
     psram_diag(chip_ram, CHIP_SIZE);
+#endif
+#if VGA32_FASTRAM_KB
+    /* Fast RAM allouee tot : le bloc contigu n'existe plus une fois l'ADF, les tables Musashi
+     * et le cache de lignes video alloues. Echec non bloquant (Amiga sans extension). */
+    {
+        const uint32_t sz = (uint32_t)VGA32_FASTRAM_KB * 1024u;
+        uint8_t *fast = (uint8_t *)heap_caps_malloc(sz, MALLOC_CAP_SPIRAM);
+        if (!fast || zorro_add_ram(fast, sz) != 0)
+            Serial.printf("ERREUR: Fast RAM %u Ko non ajoutee (PSRAM ou taille invalide)\n",
+                          (unsigned)VGA32_FASTRAM_KB);
+        else
+            memset(fast, 0, sz);
+    }
 #endif
 
     /* 2. Kickstart + ADF (depuis headers embarques) */

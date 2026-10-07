@@ -116,6 +116,49 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Mémoire : Fast RAM Zorro II, PSRAM de 8 Mo, himem (2026-10-07)
+
+**Mesures** (bilan `[MEM]` à la trame 200, firmware normal) : PSRAM libre 1 156 471 o, plus grand
+bloc 1 146 868 o ; puce **64 Mbit = 8 Mo** (`esp_spiram_get_chip_size`), dont l'ESP32 n'adresse que
+4 Mo. Occupation des 4 Mo visibles : chip 512 Ko, slow 512 Ko, ROM 256 Ko, ADF 880 Ko, tables Musashi
+576 Ko, cache de lignes + ring audio ≈ 220 Ko.
+
+**Fast RAM** : `src/hal/zorro.*` (module pur, `tests/hal/test_zorro`) émule une chaîne de cartes RAM
+Zorro II en autoconfig (spécification publique du HRM : quartets en $E80000, base écrite en $4A puis
+$48, fabricant « hacker » 0x07DB). `memory.cpp` n'a que des hooks : table `zorro_page[256]` (pages de
+64 Ko) dans les accès 8/16 bits, espace de config en $E8xxxx, `zorro_reset()` au reset. `main.cpp`
+alloue `VGA32_FASTRAM_KB` (défaut 1024) **juste après** chip/slow/ROM, sinon le bloc contigu n'existe
+plus. Validé sur la carte : le Kickstart configure la carte en **$200000**, le système l'utilise
+(`[ZORRO]` : 12-13 pages de 4 Ko touchées à la trame 1000). PSRAM restante : 107 Ko.
+
+**Les 4 Mo cachés (himem) : bloqués avec arduino-esp32 2.0.17.** Lier l'API `esp_himem_*` fait
+planter au boot (`E spiram: SPI RAM not initialized`, `abort()` dans `esp_himem_init`, backtrace
+décodée) : son constructeur global s'exécute avant l'init PSRAM paresseuse d'Arduino
+(`initArduino`). Un constructeur `psramInit()` de priorité 101 ne passe pas avant : ESP-IDF appelle
+le tableau `__init_array` **à l'envers** et la priorité ne réordonne pas ce tableau (ordre relevé
+dans l'ELF). Reste possible : notre propre commutation de bancs (registres MMU du cache PSRAM, deux
+cœurs, vidage de cache) pour y ranger l'ADF (+880 Ko visibles, −256 Ko de fenêtres → fast RAM de
+1,5 Mo). Autre gain simple non fait : `m68ki_cycles` alloue 5 types de CPU (320 Ko) pour un seul
+utilisé (−256 Ko possibles).
+
+**Coût perf : effet de cache chaotique.** Au repos, le calcul par trame a valu 12,3 ms sans Fast RAM
+et 16,5 ms avec, sur un même binaire ; 12,3 ms avec 1 Mo alloué mais non déclaré (pas un décalage
+d'adresses) ; firmware de profiling : courbes identiques avec ou sans, bloc par bloc (même travail).
+Accesseurs mémoire en IRAM : 19,2 ms (pire, annulé). Après l'ajout suivant (lecteur), 12,3 ms avec
+Fast RAM. Lecture : flash et PSRAM partagent le cache de l'ESP32 ; selon où tombent le code chaud et
+les structures que l'OS place en Fast RAM, les conflits de cache coûtent de 0 à ~7 ms par trame, sans
+lien avec le travail fait. Toujours sous 20 ms au repos (50 fps). Pas de correctif fiable sans outil
+de mesure des défauts de cache.
+
+## Lecteur de disquette : position de rotation et WORDSYNC (2026-10-07)
+
+Spécification salle blanche et règle de licence (WinUAE est GPL) : `docs/FLOPPY_SPEC.md`.
+`disk.cpp` : la lecture part du mot sous la tête (temps émulé `cur_frame × 312 + vpos` lignes,
+65/32 mots par ligne, modulo la révolution) ; avec ADKCON WORDSYNC, elle commence juste après le
+prochain mot DSKSYNC (non stocké), sans DSKBLK si la piste n'en contient pas. DMA toujours
+instantané. `tests/pc` `make testdisk` (stubs) : 12 contrôles, 6 échouent sur l'ancienne version.
+Carte : Workbench boote (130 lectures de piste, aucune sans sync), repos atteint vers la trame 1450.
+
 ## Optimisations Denise + limiteur 50 Hz (2026-10-07)
 
 Mesures sur la carte, firmware normal (Workbench embarqué, sans SD), temps réel horodaté côté PC
