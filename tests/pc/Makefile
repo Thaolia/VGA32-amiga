@@ -1,5 +1,8 @@
 # a500_phase0 — build offline (g++ -Wall -Wextra come da disciplina di progetto)
 # Musashi configurato 68000 puro via -D (sorgenti Musashi non modificati).
+# Cœur chipset (../../src/core) et Musashi (../../third_party/musashi) : compilés directement
+# depuis les sources de la cible (source unique) ; seuls src/main.cpp et src/hook_decl.h sont
+# propres au harnais.
 CXX      = g++
 CC       = gcc
 M68KCFG  = -DM68K_EMULATE_010=M68K_OPT_OFF -DM68K_EMULATE_020=M68K_OPT_OFF \
@@ -9,20 +12,30 @@ M68KCFG  = -DM68K_EMULATE_010=M68K_OPT_OFF -DM68K_EMULATE_020=M68K_OPT_OFF \
            '-DM68K_INT_ACK_CALLBACK(A)=irq_ack(A)' \
            -DM68K_INSTRUCTION_HOOK=M68K_OPT_SPECIFY_HANDLER \
            '-DM68K_INSTRUCTION_CALLBACK(pc)=instr_hook(pc)'
-CFLAGS   = -O2 -Imusashi -include src/hook_decl.h $(M68KCFG)
+M68KDIR  = ../../third_party/musashi
+CFLAGS   = -O2 -I$(M68KDIR) -include src/hook_decl.h $(M68KCFG)
 CXXFLAGS = $(CFLAGS) -Wall -Wextra
-MUSASHI  = musashi/m68kcpu.o musashi/m68kops.o musashi/m68kdasm.o musashi/softfloat/softfloat.o
-OBJS     = src/main.o src/memory.o src/cia.o src/custom.o src/drive.o src/video.o src/blitter.o src/disk.o src/input.o src/paula.o
+CORE     = ../../src/core
+CORE_SRC = memory cia custom drive video blitter disk input paula
+MUSASHI  = obj/m68k/m68kcpu.o obj/m68k/m68kops.o obj/m68k/m68kdasm.o obj/m68k/softfloat/softfloat.o
+OBJS     = obj/main.o $(CORE_SRC:%=obj/%.o)
 
 a500: $(OBJS) $(MUSASHI)
 	$(CXX) -o $@ $^
 
 # Musashi compilato come C, senza -Wextra (warning di terze parti non nostri)
-musashi/%.o: musashi/%.c
+obj/m68k/%.o: $(M68KDIR)/%.c
+	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
-src/%.o: src/%.cpp src/a500.h
-	$(CXX) $(CXXFLAGS) -Isrc -c -o $@ $<
+obj/main.o: src/main.cpp $(CORE)/a500.h | obj
+	$(CXX) $(CXXFLAGS) -I$(CORE) -c -o $@ $<
+
+obj/%.o: $(CORE)/%.cpp $(CORE)/a500.h | obj
+	$(CXX) $(CXXFLAGS) -I$(CORE) -c -o $@ $<
+
+obj:
+	mkdir -p obj
 
 test: a500 test/testrom.bin
 	./a500 test/testrom.bin 2 --trace 12
@@ -31,7 +44,7 @@ test/testrom.bin: test/mkrom.py
 	python3 test/mkrom.py $@
 
 clean:
-	rm -f a500 $(OBJS) $(MUSASHI) test/testrom.bin
+	rm -rf a500 obj tjoy test/testrom.bin
 
 .PHONY: test testvideo testblit testboot testmfm clean
 
@@ -66,8 +79,8 @@ testscroll: a500
 	python3 test/check_scroll.py test_scroll.ppm
 
 testjoy: 
-	g++ -Isrc -o /tmp/tjoy test/test_joy_c.cpp src/input.cpp
-	/tmp/tjoy
+	g++ -I$(CORE) -o tjoy test/test_joy_c.cpp $(CORE)/input.cpp
+	./tjoy
 	python3 test/check_joy.py
 
 testaudio: a500

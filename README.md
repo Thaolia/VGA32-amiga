@@ -119,7 +119,7 @@ src/hal/      couche matérielle VGA32 (VGA FabGL, PS/2, DAC, clavier Amiga)
 src/main.cpp  point d'entrée (alloc PSRAM, ROM/ADF, boucle trame)
 third_party/  Musashi (reconstruit) + sinfl
 tools/        scripts d'embarquement ROM/ADF
-tests/pc/     build PC + 8 sentinelles (copie du cœur : tests/pc/src/)
+tests/pc/     build PC + 8 sentinelles (compile src/core + third_party/musashi)
 docs/         HARDWARE, PORTING, ARCHITECTURE, design
 assets/       kick_rom.h / wb_adf.h (git-ignorés, à générer)
 ```

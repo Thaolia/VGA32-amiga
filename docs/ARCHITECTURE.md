@@ -85,6 +85,8 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 ## Dual-target / régression
 
 `tests/pc/` est le *ground truth* : rendu PPM/BMP/WAV, 8 sentinelles (6 synthétiques + `testboot`/`testmfm`
-qui exigent Kickstart/ADF). **Attention** : il compile sa propre copie `tests/pc/src/`, qui diverge de
-`src/core/` (constaté 2026-10-07 : 7 fichiers sur 10) — une modif cœur doit être reportée dans les deux arbres.
+qui exigent Kickstart/ADF). Il compile **directement** `src/core/` et `third_party/musashi/` (source
+unique) ; seuls `tests/pc/src/main.cpp` (boucle PC, sorties PPM/WAV) et `hook_decl.h` lui sont propres.
+Le rendu de ligne (`denise_render_line`) exécute la même boucle bitplanes/scroll/sprites sur PC et sur
+la carte ; le PC double ensuite les pixels lores dans `fb[]`. Non couvert : tout bloc `#ifdef ARDUINO`.
 Toute modif du cœur doit garder les sentinelles vertes avant d'atteindre la cible.

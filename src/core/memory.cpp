@@ -21,6 +21,8 @@ uint8_t *slow_ram = nullptr;   // 512KB slow RAM @ 0xC00000 (PSRAM)
 uint8_t *kick_rom = nullptr;   // 256KB in PSRAM (caricata in setup)
 #else
 uint8_t chip_ram[CHIP_SIZE];
+static uint8_t slow_ram_pc[SLOW_SIZE];   /* harnais PC (tests/pc) */
+uint8_t *slow_ram = slow_ram_pc;
 uint8_t kick_rom[ROM_SIZE];
 #endif
 int ovl = 1;

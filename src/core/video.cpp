@@ -301,6 +301,8 @@ void denise_render_line(void)
             sprite_overlay(fb_line, 0);       /* stelle/testo della cracktro */
             denise_line_cb(vpos, fb_line, 640);
         }
+#else
+        sprite_overlay(row, 0);               /* harnais PC : row est déjà remplie avec bg */
 #endif
         return;
     }
@@ -380,8 +382,8 @@ void denise_render_line(void)
     int scroll_pf1 = bplcon1 & 0x0F;
     int scroll_pf2 = (bplcon1 >> 4) & 0x0F;
 
-#if defined(ARDUINO)
-    /* Arduino: in lores calcolo 320 pixel UNA volta (niente raddoppio: denise_cb
+    /* Boucle commune cible + harnais PC (tests/pc) : le PC exécute le même code que la carte.
+       Arduino: in lores calcolo 320 pixel UNA volta (niente raddoppio: denise_cb
        decima comunque). In hires i 640 pixel servono tutti. Meta' del lavoro. */
     int outpx = hires ? 640 : 320;
     for (int x = 0; x < outpx; x++) {
@@ -398,21 +400,14 @@ void denise_render_line(void)
         row[x] = pal[idx & 63];
     }
     sprite_overlay(row, !hires);              /* sprite sopra il playfield */
+#ifdef ARDUINO
     if (denise_line_cb) denise_line_cb(vpos, row, outpx);
     return;
 #else
-    for (int x = 0; x < pixels; x++) {
-        int idx = 0;
-        for (int p = 0; p < nplanes; p++)
-            idx |= ((line[p][x >> 3] >> (7 - (x & 7))) & 1) << p;
-        uint16_t col = pal[idx & 63];
-        if (hires) {
-            row[x] = col;
-        } else {                              /* lores: ogni pixel occupa 2 colonne */
-            row[x * 2]     = col;
-            row[x * 2 + 1] = col;
-        }
-    }
+    /* fb[] fait 640 colonnes : en lores chaque pixel est doublé, de droite à gauche
+       pour ne pas écraser la source (2x >= x). */
+    if (!hires)
+        for (int x = pixels - 1; x >= 0; x--) row[2 * x + 1] = row[2 * x] = row[x];
 #endif
 }
 

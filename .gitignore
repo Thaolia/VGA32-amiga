@@ -18,6 +18,8 @@ tests/pc/*.wav
 tests/pc/*.ram
 tests/pc/boot_check.txt
 tests/pc/test/testrom*.bin
+tests/pc/obj/
+tests/pc/tjoy
 
 # ---- Config locale Claude Code ----
 .claude/

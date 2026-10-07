@@ -65,7 +65,12 @@ void irq_update(void)
     m68k_set_irq(lvl);
 }
 
+#ifndef ARDUINO
+uint32_t intreq_src_count[16] = {0};   /* harnais PC : diagnostic de blocage (tests/pc/src/main.cpp) */
+void intreq_set(int bit) { intreq |= (uint16_t)(1 << bit); if (bit>=0 && bit<16) intreq_src_count[bit]++; irq_update(); }
+#else
 void intreq_set(int bit) { intreq |= (uint16_t)(1 << bit); irq_update(); }
+#endif
 
 static uint16_t setclr(uint16_t cur, uint16_t v)
 {

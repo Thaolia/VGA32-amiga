@@ -210,4 +210,18 @@ void cia_a_kbd_shift_in(uint8_t sdr_value)
     cia_a.sdr = sdr_value;
     icr_set(&cia_a, 0x08);
 }
+#else
+/* harnais PC : état du CIA-B au blocage (stallo) */
+void cia_b_dump(void)
+{
+    logmsg("[CIA-B] icr_mask=%02X icr_data=%02X\n", cia_b.icr_mask, cia_b.icr_data);
+    logmsg("[CIA-B] CRA=%02X (timerA %s, clk=%s)  ta=%04X latch=%04X\n",
+           cia_b.cra, (cia_b.cra&1)?"ON":"off", (cia_b.cra&0x20)?"CNT":"E-clk",
+           cia_b.ta, cia_b.ta_latch);
+    logmsg("[CIA-B] CRB=%02X (timerB %s, clk=%s)  tb=%04X latch=%04X\n",
+           cia_b.crb, (cia_b.crb&1)?"ON":"off", (cia_b.crb&0x60)?"alt":"E-clk",
+           cia_b.tb, cia_b.tb_latch);
+    logmsg("[CIA-B] TOD=%06X alarm=%06X running=%d\n",
+           cia_b.tod, cia_b.tod_alarm, cia_b.tod_running);
+}
 #endif

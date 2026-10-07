@@ -116,6 +116,35 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Harnais PC : source unique (2026-10-07)
+
+**Constat** : `tests/pc/` compilait sa propre copie du cœur (`tests/pc/src/*.cpp`, héritée du `pc/`
+upstream) et de Musashi (`tests/pc/musashi/`). 7 fichiers cœur sur 10 divergeaient de `src/core/` ;
+surtout, le chemin de rendu PC de `src/core/video.cpp` n'avait ni scroll fin (BPLCON1) ni sprites,
+et le chemin `ARDUINO` (celui de la carte) n'était jamais exécuté sur PC. Les sentinelles validaient
+donc un autre code que celui de la carte.
+
+**Correctif** : le harnais compile `src/core/` et `third_party/musashi/` directement ; copies supprimées.
+Retouches du cœur, toutes neutres pour la cible :
+- `video.cpp` : la boucle bitplanes/scroll/sprites de la carte devient commune ; sous `#ifndef ARDUINO`,
+  doublage des pixels lores dans `fb[]` (640 colonnes) et sprites sur l'écran 0 bitplane.
+- `memory.cpp` : slow RAM statique sur PC (pointeur `slow_ram`, comme sur la carte).
+- `custom.cpp` / `cia.cpp` / `a500.h` : diagnostics de blocage du harnais (`intreq_src_count`,
+  `cia_b_dump`, déclaration `paula_write_wav`) sous `#ifndef ARDUINO`.
+- Musashi : le harnais force la conf 68000 par `-D` (même résultat que `third_party/musashi/m68kconf.h`) ;
+  la PMMU, active dans l'ancienne copie, est désormais OFF comme sur la carte (sans effet sur un 68000).
+
+**Vérifié** :
+- 6 sentinelles : mêmes 68 contrôles `OK` qu'avant (8/29/7/5/13/6).
+- Mutation volontaire du scroll dans la boucle commune → `testscroll` échoue : le harnais voit bien
+  le code de la carte.
+- Cible : sections chargées de l'ELF (`.flash.text`, `.iram0.text`, `.flash.rodata`, `.dram0.data`,
+  `.flash.appdesc`) identiques octet pour octet avant/après. Le `firmware.bin` diffère quand même,
+  car il embarque le SHA-256 de l'ELF (debug et numéros de ligne compris).
+- Pour garder un code machine identique, `int pixels` et le `return;` final du chemin `ARDUINO`
+  restent en place : les retirer (no-ops) changeait l'allocation de registres de
+  `denise_render_line` (même taille, ordre différent), ce qui aurait exigé une re-mesure perf.
+
 ## Clavier Amiga (Phase 2 — implémenté)
 
 Constat : `core/cia.cpp` possédait déjà l'IRQ série (`icr_set(&cia_a, 0x08)` → PORTS → INT2) mais

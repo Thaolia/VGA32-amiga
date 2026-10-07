@@ -88,6 +88,9 @@ void sprite_arm(int n);
 void sprite_vblank(void);
 #ifdef ARDUINO
 extern void (*denise_line_cb)(int vpos, const uint16_t *pixels, int w);
+#else
+int  paula_write_wav(const char *path);   /* harnais PC (tests/pc) */
+void cia_b_dump(void);
 #endif
 int  video_write_ppm(const char *path);
 

@@ -17,16 +17,19 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 - **Le matériel tranche.** Un changement observable n'est « fait » qu'après lecture du log série
   ou observation du moniteur VGA ; une compilation propre est nécessaire, jamais suffisante.
 
-## Harnais PC : copie divergente — piège critique
+## Harnais PC : source unique, couverture partielle
 
-- `tests/pc/` compile **sa propre copie** `tests/pc/src/*.cpp`, PAS `src/core/`. Les deux arbres
-  divergent (constaté 2026-10-07 : 7/10 fichiers, dont `video.cpp` et la sémantique TOD de `cia.cpp`).
-- Donc : modifier `src/core/X` **sans** reporter dans `tests/pc/src/X` = les sentinelles testent
-  autre chose que la cible. Toute modif d'un fichier cœur se reporte dans les deux arbres, ou
-  le rapport dit explicitement « non couvert par le harnais PC ».
-- Ne jamais écrire « les sentinelles passent » comme preuve qu'une modif `src/core/` est saine
-  sans avoir vérifié que le fichier touché est identique (`cmp src/core/X tests/pc/src/X`) ou
-  que la divergence ne concerne que des hooks HAL.
+- `tests/pc/` compile directement `src/core/*.cpp` et `third_party/musashi/` (source unique avec la
+  cible). Ne JAMAIS recréer de copie du cœur ou de Musashi sous `tests/pc/` : c'est ce qui avait
+  rendu les sentinelles aveugles (copie divergente supprimée le 2026-10-07).
+- Le code sous `#ifdef ARDUINO` n'est PAS couvert par le harnais : cache de skip de lignes,
+  `denise_line_cb`, `cia_a_kbd_shift_in`, `input_mouse_delta`, `drive_eject`, allocations PSRAM.
+  Une modif dans ces blocs se valide sur la carte, et le rapport le dit.
+- Tout code ajouté au cœur pour le PC seul va sous `#ifndef ARDUINO`, sans toucher au chemin cible.
+- Modif du cœur censée être neutre pour la cible → le prouver : les sections chargées de l'ELF
+  (`.flash.text`, `.iram0.text`, `.flash.rodata`, `.dram0.data`) restent identiques
+  (`objcopy -O binary -j <section>` puis `cmp`). Le `firmware.bin` change toujours dès qu'une
+  ligne bouge (il embarque le SHA-256 de l'ELF, debug inclus) : ne pas s'en servir comme preuve.
 
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
@@ -67,7 +70,7 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 ## Routage agent seul vs sous-agents
 
-- **Seul** : tout ce qui touche `src/core/*`, `tests/pc/src/*`, l'ordonnancement des cœurs/tâches,
+- **Seul** : tout ce qui touche `src/core/*`, `tests/pc/`, l'ordonnancement des cœurs/tâches,
   `video_vga.cpp` (chemin chaud IRAM), et le couple `kbd_amiga` + `cia.cpp` (couplage CIA).
 - **Sous-agents parallèles** (fichiers disjoints uniquement) : `audio_dac`, `sdcard`/`disk_*`,
   `tools/*.py`, docs. Chaque sous-agent reçoit la consigne de ne pas toucher `src/core/`.
@@ -90,8 +93,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Quality gates (avant de déclarer « fait »)
 
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
-   testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert, ET le fichier touché reporté
-   dans `tests/pc/src/` (cf. piège ci-dessus). `testboot`/`testmfm` exigent `kick34005.A500` /
+   testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert ; modif sous `#ifdef ARDUINO`
+   → non couverte, le signaler. `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.
 2. HAL pure modifiée (`serial_proto`, `disk_select`) → `make -C tests/hal test` au vert.
 3. Cible → `pio run -e ttgo-vga32` compile sans warning nouveau.
