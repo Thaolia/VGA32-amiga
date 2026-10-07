@@ -13,6 +13,30 @@
 #include "esp_heap_caps.h"
 #endif
 
+/* Portage VGA32 : profiling interne de denise_render_line (env pio ttgo-vga32-prof, flag
+ * -DVGA32_PROF=1 visible ici car passé en ligne de commande). Les marques DPROF()/DPROF_LINE()
+ * s'écrivent SANS point-virgule : hors profiling elles disparaissent sans laisser de ';' vide,
+ * pour que le build normal reste token-identique (un token de plus suffit à changer
+ * l'allocation de registres de cette fonction chaude). */
+#if defined(ARDUINO) && defined(VGA32_PROF) && VGA32_PROF
+uint32_t denise_prof_cyc[DP_N];
+uint32_t denise_prof_lines[DL_N];
+static inline uint32_t dprof_cc(void)
+{
+    uint32_t c;
+    __asm__ __volatile__("rsr %0, ccount" : "=a"(c));
+    return c;
+}
+#define DPROF_START()   uint32_t dprof_t = dprof_cc();
+#define DPROF(slot)     { uint32_t dprof_n = dprof_cc(); denise_prof_cyc[slot] += dprof_n - dprof_t; \
+                          dprof_t = dprof_n; }
+#define DPROF_LINE(k)   denise_prof_lines[k]++;
+#else
+#define DPROF_START()
+#define DPROF(slot)
+#define DPROF_LINE(k)
+#endif
+
 /* stato copper */
 static uint32_t cop_pc;
 static int      cop_stopped;      /* WAIT mai soddisfatto (fine lista) */
@@ -265,7 +289,9 @@ static void sprite_overlay(uint16_t *row, int lores_narrow)
 void denise_render_line(void)
 {
     if (vpos >= FB_H) return;
+    DPROF_START()
     sprite_dma_line();   /* DMA sprite: avanza SEMPRE, anche se il playfield e' saltato */
+    DPROF(DP_SPRDMA)
     uint16_t bg = custom_get(0x180);              /* COLOR00 */
 #ifdef ARDUINO
     uint16_t *row = fb_line;
@@ -273,11 +299,12 @@ void denise_render_line(void)
     uint16_t *row = fb[vpos];
 #endif
     for (int x = 0; x < FB_W; x++) row[x] = bg;
+    DPROF(DP_BGFILL)
 
 #ifdef ARDUINO
-#define BG_FLUSH() do { if (denise_line_cb) { \
+#define BG_FLUSH() do { DPROF(DP_WIN) if (denise_line_cb) { \
     for (int _x=0;_x<FB_W;_x++) fb_line[_x]=bg; \
-    denise_line_cb(vpos, fb_line, 640); } } while(0)
+    denise_line_cb(vpos, fb_line, 640); } DPROF(DP_CB) DPROF_LINE(DL_BORDER) } while(0)
 #else
 #define BG_FLUSH() do {} while(0)
 #endif
@@ -296,11 +323,14 @@ void denise_render_line(void)
         /* zero bitplane: la schermata e' fatta di solo copper-color + sprite
            (es. cracktro/starfield). Riempio con lo sfondo e disegno gli sprite. */
 #ifdef ARDUINO
+        DPROF(DP_WIN)
         if (denise_line_cb) {
             for (int _x = 0; _x < FB_W; _x++) fb_line[_x] = bg;
             sprite_overlay(fb_line, 0);       /* stelle/testo della cracktro */
             denise_line_cb(vpos, fb_line, 640);
         }
+        DPROF(DP_CB)
+        DPROF_LINE(DL_NOPLANES)
 #else
         sprite_overlay(row, 0);               /* harnais PC : row est déjà remplie avec bg */
 #endif
@@ -311,6 +341,7 @@ void denise_render_line(void)
 
     int bytes_per_row = hires ? 80 : 40;      /* word DMA per riga di bitplane */
     int pixels        = hires ? 640 : 320;
+    DPROF(DP_WIN)
 
     uint8_t line[6][80];
     for (int p = 0; p < nplanes; p++) {
@@ -325,6 +356,7 @@ void denise_render_line(void)
         }
         bpl_pt[p] = pt + (uint32_t)bytes_per_row + (uint32_t)(int16_t)custom_get((p & 1) ? 0x10A : 0x108);
     }   /* piani 1,3,5 (indice pari) -> BPL1MOD; 2,4,6 -> BPL2MOD */
+    DPROF(DP_FETCH)
 
 #ifdef ARDUINO
     /* SKIP sui DATI (non sui puntatori: quelli cambiano ogni frame nel Workbench).
@@ -356,7 +388,12 @@ void denise_render_line(void)
         for (int i = 0; i < sk_ncol; i++)
             if (prev_pal[vpos][i] != palette_entry_12(i)) { data_same = false; break; }
 
+    DPROF(DP_SKIPCHK)
+#if defined(VGA32_PROF) && VGA32_PROF
+    if (data_same) { DPROF_LINE(DL_SKIPPED) return; }
+#else
     if (data_same) return;   // riga identica e gia' sul display: niente da fare
+#endif
 
     // dati cambiati: salvo lo snapshot per il prossimo frame e procedo a disegnare
     prev_valid[vpos] = true;
@@ -364,6 +401,7 @@ void denise_render_line(void)
     for (int p = 0; p < nplanes; p++) memcpy(prev_line[vpos][p], line[p], bytes_per_row);
     for (int i = 0; i < sk_ncol; i++) prev_pal[vpos][i] = palette_entry_12(i);
     g_row_onscreen[vpos] = false;   // sara' ri-confermata dal dirty-check nel callback
+    DPROF(DP_SNAP)
 #endif
 
     /* palette precalcolata fuori dal loop: le tinte non cambiano pixel-per-pixel.
@@ -372,6 +410,7 @@ void denise_render_line(void)
     int ncol = 1 << nplanes;
     if (ncol > 64) ncol = 64;
     for (int i = 0; i < ncol; i++) pal[i] = palette_entry_12(i);
+    DPROF(DP_PAL)
 #ifdef ARDUINO
     color_diag_last_bplcon0 = bplcon0;
     color_diag_last_nplanes = nplanes;
@@ -399,9 +438,13 @@ void denise_render_line(void)
 #endif
         row[x] = pal[idx & 63];
     }
+    DPROF(DP_PIXELS)
     sprite_overlay(row, !hires);              /* sprite sopra il playfield */
+    DPROF(DP_SPRITES)
 #ifdef ARDUINO
     if (denise_line_cb) denise_line_cb(vpos, row, outpx);
+    DPROF(DP_CB)
+    DPROF_LINE(DL_DRAWN)
     return;
 #else
     /* fb[] fait 640 colonnes : en lores chaque pixel est doublé, de droite à gauche

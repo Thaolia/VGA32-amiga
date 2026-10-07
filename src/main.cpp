@@ -155,6 +155,24 @@ static void prof_report(void)
                   blit_ms, (unsigned)(blits / PROF_WINDOW),
                   cb_cyc / mhz / 1000.0 / PROF_WINDOW, (unsigned)(cb_lines / PROF_WINDOW));
     for (int i = 0; i < P_N; i++) s_prof[i] = 0;
+
+    /* detail de denise (instrumente dans core/video.cpp) : ms/trame par sous-etape,
+     * puis lignes/trame par sortie de denise_render_line */
+    static const char *const DP_NAME[DP_N] = {
+        "sprdma", "bgfill", "fenetre", "fetch", "skipchk", "snap", "pal", "pixels",
+        "sprites", "cb" };
+    static const char *const DL_NAME[DL_N] = { "bordure", "0plan", "sautees", "dessinees" };
+    Serial.print("[DENISE]");
+    for (int i = 0; i < DP_N; i++) {
+        Serial.printf(" %s %.2f", DP_NAME[i], denise_prof_cyc[i] / mhz / 1000.0 / PROF_WINDOW);
+        denise_prof_cyc[i] = 0;
+    }
+    Serial.print(" | lignes/tr:");
+    for (int i = 0; i < DL_N; i++) {
+        Serial.printf(" %s %u", DL_NAME[i], (unsigned)(denise_prof_lines[i] / PROF_WINDOW));
+        denise_prof_lines[i] = 0;
+    }
+    Serial.println();
 }
 #else
 #define PROF_MARK(slot) do {} while (0)

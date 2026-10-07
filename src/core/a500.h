@@ -88,6 +88,14 @@ void sprite_arm(int n);
 void sprite_vblank(void);
 #ifdef ARDUINO
 extern void (*denise_line_cb)(int vpos, const uint16_t *pixels, int w);
+#if defined(VGA32_PROF) && VGA32_PROF
+/* portage VGA32 : profiling interne de denise_render_line (cycles et lignes par sortie) */
+enum { DP_SPRDMA, DP_BGFILL, DP_WIN, DP_FETCH, DP_SKIPCHK, DP_SNAP, DP_PAL, DP_PIXELS,
+       DP_SPRITES, DP_CB, DP_N };
+enum { DL_BORDER, DL_NOPLANES, DL_SKIPPED, DL_DRAWN, DL_N };
+extern uint32_t denise_prof_cyc[DP_N];
+extern uint32_t denise_prof_lines[DL_N];
+#endif
 #else
 int  paula_write_wav(const char *path);   /* harnais PC (tests/pc) */
 void cia_b_dump(void);

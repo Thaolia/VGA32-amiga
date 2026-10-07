@@ -147,10 +147,38 @@ Lecture :
 - Copper, Paula, CIA, entrées, `vTaskDelay` : 1,4 à 2,1 ms au total, rien à gagner là.
 - Plafond théorique si Denise devenait gratuit : ~6-10 ms/trame au repos → 50 fps atteignables.
 
-Hypothèse à vérifier (non mesurée) pour les ~85 µs/ligne : `denise_render_line` (flash) et ses
-données (bitplanes et snapshots en PSRAM) sont expulsés du cache par Musashi entre deux lignes, et
-rechargés à chaque ligne ; s'y ajoutent le remplissage de 640 pixels de fond et la copie/comparaison
-des bitplanes en PSRAM. Prochaine étape : sous-profiler `denise_render_line`.
+### Détail de Denise (ligne `[DENISE]`, même env)
+
+`core/video.cpp` est instrumenté sous `#if defined(ARDUINO) && VGA32_PROF` (marques `DPROF()` sans
+point-virgule : build normal vérifié identique, sections ELF). Bureau Workbench au repos
+(lignes/trame : 5 bordure, 96 sans bitplan, 195 sautées, 16 dessinées), ms/trame :
+
+| bgfill | cb (+ refill bordure/0 plan) | pixels | skipchk | fetch | sprdma | autres |
+|---|---|---|---|---|---|---|
+| **10,5** | 4,7 | 3,7 | 2,4 | 1,4 | 0,4 | ~0,5 |
+
+À l'écran Kickstart (312 lignes de bordure) : bgfill 10,5 + cb 16,8 (refill 640 px + conversion).
+
+**Cause racine mesurée** : chaque écriture mémoire coûte ~12,6 cycles. Le désassemblage de la boucle
+de fond montre `s16i` + **`memw`** à chaque pixel : `-mfix-esp32-psram-cache-issue` (obligatoire, puce
+rev1) ajoute une barrière après TOUTE écriture, même en DRAM interne (`fb_line` est en
+`0x3FFC6140`), et `-Os` (posé après `-O2` par le framework, donc gagnant) garde le compteur de
+boucle sur la pile. Remplir 640 pixels coûte donc ~34 µs. L'hypothèse « cache expulsé par Musashi »
+n'est pas nécessaire pour expliquer les chiffres.
+
+**Gaspillage identifié** : sur la carte, le remplissage de fond en tête de `denise_render_line`
+(`bgfill`, 10,5 ms/trame) est du **travail mort** : chaque chemin qui livre `fb_line` à la VGA le
+remplit de nouveau (`BG_FLUSH`, 0 bitplan) ou écrase tous les pixels lus (ligne dessinée), et les
+lignes sautées ne l'utilisent pas. Il ne sert qu'au harnais PC (`row` = framebuffer complet).
+
+Pistes, par gain estimé (non implémentées) :
+1. Ne pas faire `bgfill` sous `ARDUINO` : environ −10,5 ms/trame (repos 28 → ~18 ms).
+2. Remplissages/écritures en mots de 32 bits (2 pixels par `memw`) dans `BG_FLUSH`, le chemin
+   0 bitplan et `denise_cb` ; ou ne pas renvoyer une ligne de fond identique à la précédente.
+3. Boucle pixels (~230 µs par ligne dessinée) : sortir l'écriture `color_diag_max_idx` de la
+   boucle (un `memw` de plus par pixel) et écrire 2 pixels par mot.
+4. Effet global du `memw` sur Musashi (chaque écriture 68000 passe par du C instrumenté) : à
+   mesurer séparément.
 
 ## Variante Kickstart seul (`ttgo-vga32-kickonly`)
 
