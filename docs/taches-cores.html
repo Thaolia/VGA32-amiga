@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tâches VGA32 Amiga</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Mise en page : fiche technique d'atelier — un schéma pleine largeur, puis le tableau de référence. */
+:root {
+  --bg: #f3f4f1;
+  --surface: #ffffff;
+  --fg: #1d2420;
+  --muted: #5b6660;
+  --line: #c9cfc9;
+  --core0: #e3efe8;
+  --core1: #e6eaf3;
+  --accent: #b5482a;
+  --accent-soft: #f6e2db;
+  --display: "IBM Plex Sans Condensed", "Arial Narrow", sans-serif;
+  --body: "IBM Plex Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141816; --surface: #1c211e; --fg: #e4e9e5; --muted: #9aa69f; --line: #3a433e;
+    --core0: #1f2e26; --core1: #222838; --accent: #ef8a68; --accent-soft: #3b2620;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141816; --surface: #1c211e; --fg: #e4e9e5; --muted: #9aa69f; --line: #3a433e;
+  --core0: #1f2e26; --core1: #222838; --accent: #ef8a68; --accent-soft: #3b2620;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1080px; margin: 0 auto; padding-inline: 16px; padding-block: 28px 48px; display: grid; gap: 28px; }
+header { display: grid; gap: 8px; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+h1 { font: 600 clamp(26px, 4vw, 36px)/1.1 var(--display); margin: 0; text-wrap: balance; }
+h2 { font: 600 20px/1.2 var(--display); margin: 0 0 10px; }
+.lede { margin: 0; max-width: 68ch; color: var(--muted); }
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.fact { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 12px 14px; min-width: 0; }
+.fact b { display: block; font: 600 15px/1.3 var(--display); margin-bottom: 4px; }
+.fact p { margin: 0; font-size: 14px; color: var(--muted); }
+.fact.warn { border-color: var(--accent); background: var(--accent-soft); }
+figure { margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 16px; }
+.scroll { overflow-x: auto; }
+svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--fg); font-family: var(--body); }
+svg text { fill: currentColor; font-size: 12.5px; }
+svg .t { font: 600 13.5px var(--display); }
+svg .mono { font-family: var(--mono); font-size: 11.5px; }
+svg .small { font-size: 11.5px; fill: var(--muted); }
+svg .sec { font: 500 11px var(--mono); letter-spacing: .08em; fill: var(--muted); }
+svg .frame0 { fill: var(--core0); stroke: var(--line); }
+svg .frame1 { fill: var(--core1); stroke: var(--line); }
+svg .box { fill: var(--surface); stroke: currentColor; stroke-width: 1; }
+svg .ghost { fill: none; stroke: var(--muted); stroke-dasharray: 5 4; }
+svg .hot { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .hot-t { fill: var(--accent); }
+svg .mem { fill: var(--surface); stroke: currentColor; stroke-width: 1.5; }
+svg .hw { fill: none; stroke: var(--muted); stroke-width: 1; }
+svg .arrow { stroke: currentColor; stroke-width: 1.4; fill: none; }
+svg .arrow-hot { stroke: var(--accent); stroke-width: 1.4; fill: none; }
+svg .bar-calc { fill: var(--fg); }
+svg .bar-wait { fill: none; stroke: currentColor; stroke-dasharray: 3 3; }
+figcaption { margin-top: 12px; font-size: 14px; color: var(--muted); max-width: 80ch; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 680px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font: 500 11.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+td.n { font-family: var(--mono); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font: 500 11.5px/1 var(--mono); padding: 4px 7px; border-radius: 3px; border: 1px solid var(--line); white-space: nowrap; }
+.c0 { background: var(--core0); } .c1 { background: var(--core1); }
+.note { font-size: 14px; color: var(--muted); max-width: 80ch; margin: 10px 0 0; }
+code { font-family: var(--mono); font-size: .92em; }
+</style>
+<style>body{margin:0}</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <span class="eyebrow">TTGO VGA32 v1.4 · ESP32 rev1 · 2 × 240 MHz · firmware du 2026-10-07</span>
+    <h1>Qui tourne sur quel cœur</h1>
+    <p class="lede">Relevé dans le code du projet, de FabGL 1.0.9 et d'arduino-esp32 2.0.17 (affinités, priorités, piles). Les temps viennent des mesures série sur la carte.</p>
+  </header>
+
+  <section class="facts" aria-label="À retenir">
+    <div class="fact"><b>Le cœur 0 fait toute l'émulation</b><p><code>emu_task</code> enchaîne 68000, chipset et rendu des 312 lignes, puis attend l'échéance des 50 trames/s.</p></div>
+    <div class="fact"><b>Le cœur 1 est presque vide</b><p>L'image VGA sort par DMA (I2S1) sans CPU. D'après le code, rien n'y tourne en continu ; sa charge n'a pas encore été mesurée.</p></div>
+    <div class="fact warn"><b>L'audio partage le cœur 0</b><p>FabGL épingle l'interruption du <code>SoundGenerator</code> sur <code>quietCore()</code>, donc sur le cœur de l'émulateur.</p></div>
+  </section>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1000 625" role="img" aria-label="Le cœur 0 exécute emu_task et l'interruption audio ; le cœur 1 exécute loopTask, adfload et des interruptions légères. Ils communiquent par le framebuffer VGA, le ring audio Paula, l'image ADF et la FIFO UART, lus ou remplis par le DMA et les périphériques.">
+      <defs>
+        <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+        <marker id="ahh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" class="hot-t"/>
+        </marker>
+      </defs>
+
+      <!-- tâches sans affinité -->
+      <rect class="ghost" x="20" y="20" width="960" height="36" rx="4"/>
+      <text x="500" y="43" text-anchor="middle" class="small">Sans affinité (l'ordonnanceur choisit) : tâches FabGL souris + clavier, prio 5, bloquées sur leur file (PS/2 absent)</text>
+
+      <!-- cadres des cœurs -->
+      <rect class="frame0" x="20" y="70" width="460" height="330" rx="6"/>
+      <rect class="frame1" x="520" y="70" width="460" height="330" rx="6"/>
+      <text x="40" y="94" class="t">Cœur 0 · quietCore · émulation</text>
+      <text x="540" y="94" class="t">Cœur 1 · busiestCore · côté VGA</text>
+
+      <!-- cœur 0 : ligne haute -->
+      <rect class="ghost" x="40" y="106" width="210" height="40" rx="4"/>
+      <text x="145" y="124" text-anchor="middle">decomp · prio 5</text>
+      <text x="145" y="139" text-anchor="middle" class="small">boot seulement, puis supprimée</text>
+      <rect class="box" x="270" y="106" width="190" height="40" rx="4"/>
+      <text x="365" y="124" text-anchor="middle">IDLE0 · prio 0</text>
+      <text x="365" y="139" text-anchor="middle" class="small">surveillée par le watchdog (5 s)</text>
+
+      <!-- emu_task -->
+      <rect class="box" x="40" y="160" width="290" height="225" rx="4" stroke-width="2"/>
+      <text x="56" y="184" class="t">emu_task · prio 5 · pile 24 Ko</text>
+      <text x="56" y="208">À chaque trame :</text>
+      <text x="56" y="227" class="mono">entrées UART / PS2</text>
+      <text x="56" y="245" class="mono">312 × copper, denise,</text>
+      <text x="56" y="263" class="mono">      68000, paula, cia</text>
+      <text x="56" y="281" class="mono">attente → 50 trames/s</text>
+      <!-- budget de trame mesuré au repos : 12,3 ms de calcul sur 20 ms -->
+      <rect class="bar-calc" x="56" y="304" width="159" height="18"/>
+      <rect class="bar-wait" x="215" y="304.5" width="99" height="17"/>
+      <text x="56" y="341" class="mono">calcul 12,3 ms</text>
+      <text x="314" y="341" text-anchor="end" class="mono">attente 7,7</text>
+      <text x="56" y="365" class="small">trame de 20 ms, bureau au repos (mesuré)</text>
+
+      <!-- ISR audio -->
+      <rect class="hot" x="345" y="160" width="115" height="225" rx="4"/>
+      <text x="402" y="184" text-anchor="middle" class="t hot-t">ISR I2S0</text>
+      <text x="402" y="206" text-anchor="middle">audio</text>
+      <text x="402" y="232" text-anchor="middle" class="mono">getSample()</text>
+      <text x="402" y="256" text-anchor="middle" class="small">remplit le</text>
+      <text x="402" y="271" text-anchor="middle" class="small">buffer DMA</text>
+      <text x="402" y="330" text-anchor="middle" class="small">prend du temps</text>
+      <text x="402" y="345" text-anchor="middle" class="small">à emu_task</text>
+
+      <!-- cœur 1 -->
+      <rect class="box" x="540" y="106" width="210" height="40" rx="4"/>
+      <text x="645" y="124" text-anchor="middle">loopTask · prio 1</text>
+      <text x="645" y="139" text-anchor="middle" class="small">setup(), puis bloquée</text>
+      <rect class="box" x="770" y="106" width="190" height="40" rx="4"/>
+      <text x="865" y="124" text-anchor="middle">IDLE1 · prio 0</text>
+      <text x="865" y="139" text-anchor="middle" class="small">tourne l'essentiel du temps</text>
+
+      <rect class="box" x="540" y="160" width="420" height="90" rx="4"/>
+      <text x="556" y="184" class="t">Interruptions légères</text>
+      <text x="556" y="208">ISR VSync I2S1 · file de primitives FabGL (vide ici)</text>
+      <text x="556" y="230">ISR ULP · réception PS/2 (périphériques absents)</text>
+
+      <rect class="box" x="540" y="265" width="200" height="120" rx="4"/>
+      <text x="556" y="289" class="t">adfload · prio 1</text>
+      <text x="556" y="309" class="small">pile 6 Ko</text>
+      <text x="556" y="331">lit un ADF sur la SD</text>
+      <text x="556" y="349">au bouton IO36</text>
+      <text x="556" y="371" class="small">files s_req / s_res ↔ emu</text>
+
+      <rect class="box" x="760" y="265" width="200" height="120" rx="4"/>
+      <text x="776" y="289" class="t">ISR UART0</text>
+      <text x="776" y="331">octets du PC</text>
+      <text x="776" y="349" class="small">clavier + souris</text>
+      <text x="776" y="371" class="small">(remote_input.py)</text>
+
+      <!-- mémoire partagée -->
+      <text x="500" y="440" text-anchor="middle" class="sec">MÉMOIRE PARTAGÉE</text>
+      <rect class="mem" x="20" y="450" width="220" height="52" rx="4"/>
+      <text x="130" y="472" text-anchor="middle" class="t">framebuffer VGA</text>
+      <text x="130" y="490" text-anchor="middle" class="small">DRAM interne, 320 × 240</text>
+      <rect class="mem" x="260" y="450" width="220" height="52" rx="4"/>
+      <text x="370" y="472" text-anchor="middle" class="t">ring audio Paula</text>
+      <text x="370" y="490" text-anchor="middle" class="small">PSRAM, 8192 échantillons</text>
+      <rect class="mem" x="520" y="450" width="220" height="52" rx="4"/>
+      <text x="630" y="472" text-anchor="middle" class="t">image disquette DF0</text>
+      <text x="630" y="490" text-anchor="middle" class="small">PSRAM, 880 Ko · lue par emu</text>
+      <rect class="mem" x="760" y="450" width="220" height="52" rx="4"/>
+      <text x="870" y="472" text-anchor="middle" class="t">FIFO UART RX</text>
+      <text x="870" y="490" text-anchor="middle" class="small">lue par emu (serial_kbd)</text>
+
+      <!-- flèches cœurs -> mémoire -->
+      <line class="arrow" x1="130" y1="385" x2="130" y2="448" marker-end="url(#ah)"/>
+      <text x="137" y="422" class="small">écrit (denise_cb)</text>
+      <line class="arrow" x1="290" y1="385" x2="290" y2="448" marker-end="url(#ah)"/>
+      <text x="297" y="422" class="small">écrit</text>
+      <line class="arrow-hot" x1="420" y1="450" x2="420" y2="387" marker-end="url(#ahh)"/>
+      <text x="427" y="422" class="small">lit</text>
+      <line class="arrow" x1="640" y1="385" x2="640" y2="448" marker-end="url(#ah)"/>
+      <text x="647" y="422" class="small">écrit (DF0 éjecté)</text>
+      <line class="arrow" x1="860" y1="385" x2="860" y2="448" marker-end="url(#ah)"/>
+      <text x="867" y="422" class="small">remplit</text>
+
+      <!-- matériel autonome -->
+      <text x="500" y="548" text-anchor="middle" class="sec">MATÉRIEL AUTONOME (DMA, SANS CPU)</text>
+      <rect class="hw" x="20" y="560" width="220" height="50" rx="4"/>
+      <text x="130" y="581" text-anchor="middle">DMA I2S1 → VGA</text>
+      <text x="130" y="598" text-anchor="middle" class="small">64 couleurs, en continu</text>
+      <rect class="hw" x="260" y="560" width="220" height="50" rx="4"/>
+      <text x="370" y="581" text-anchor="middle">DMA I2S0 → DAC</text>
+      <text x="370" y="598" text-anchor="middle" class="small">GPIO25, haut-parleur</text>
+      <rect class="hw" x="520" y="560" width="220" height="50" rx="4"/>
+      <text x="630" y="581" text-anchor="middle">carte SD (SPI)</text>
+      <text x="630" y="598" text-anchor="middle" class="small">fichiers .adf</text>
+      <rect class="hw" x="760" y="560" width="220" height="50" rx="4"/>
+      <text x="870" y="581" text-anchor="middle">UART0 ↔ USB</text>
+      <text x="870" y="598" text-anchor="middle" class="small">pont CH9102, 115200 bauds</text>
+
+      <!-- flèches mémoire <-> matériel -->
+      <line class="arrow" x1="130" y1="502" x2="130" y2="558" marker-end="url(#ah)"/>
+      <text x="137" y="534" class="small">lu à chaque balayage</text>
+      <line class="arrow-hot" x1="370" y1="502" x2="370" y2="558" marker-end="url(#ahh)"/>
+      <text x="377" y="534" class="small">via l'ISR I2S0</text>
+      <line class="arrow" x1="630" y1="558" x2="630" y2="504" marker-end="url(#ah)"/>
+      <text x="637" y="534" class="small">lu par adfload</text>
+      <line class="arrow" x1="870" y1="558" x2="870" y2="504" marker-end="url(#ah)"/>
+      <text x="877" y="534" class="small">octets reçus</text>
+    </svg>
+    </div>
+    <figcaption>Les deux cœurs ne se parlent presque pas directement : ils échangent par quatre zones mémoire. Le travail lourd (68000 + chipset + rendu) est sur le cœur 0, avec l'interruption audio (en orange). Le cœur 1 ne fait que des tâches courtes ; l'image VGA, le son, la SD et l'UART passent par le DMA et les périphériques. Le cache SPI0 (flash + PSRAM, 80 MHz) est partagé par les deux cœurs.</figcaption>
+  </figure>
+
+  <section>
+    <h2>Toutes les tâches</h2>
+    <div class="scroll">
+    <table>
+      <thead><tr><th>Tâche / interruption</th><th>Cœur</th><th>Prio</th><th>Pile</th><th>Rôle</th><th>Quand</th></tr></thead>
+      <tbody>
+        <tr><td><code>emu</code> (emu_task)</td><td><span class="pill c0">0</span></td><td class="n">5</td><td class="n">24 Ko</td><td>68000 + chipset + rendu des lignes, limiteur 50 trames/s</td><td>en continu</td></tr>
+        <tr><td>ISR I2S0 (SoundGenerator)</td><td><span class="pill c0">0</span></td><td class="n">niv. 1</td><td class="n">—</td><td>dépile le ring Paula vers le DMA du DAC</td><td>à chaque buffer DMA</td></tr>
+        <tr><td><code>decomp</code></td><td><span class="pill c0">0</span></td><td class="n">5</td><td class="n">40 Ko</td><td>décompresse l'ADF embarqué (absent du firmware Kickstart seul)</td><td>boot, puis supprimée</td></tr>
+        <tr><td><code>loopTask</code> (Arduino)</td><td><span class="pill c1">1</span></td><td class="n">1</td><td class="n">8 Ko</td><td><code>setup()</code>, puis <code>loop()</code> bloquée indéfiniment</td><td>boot</td></tr>
+        <tr><td><code>adfload</code></td><td><span class="pill c1">1</span></td><td class="n">1</td><td class="n">6 Ko</td><td>lit l'ADF choisi sur la SD pendant que DF0 est éjecté</td><td>au bouton IO36</td></tr>
+        <tr><td>ISR UART0</td><td><span class="pill c1">1</span></td><td class="n">—</td><td class="n">—</td><td>reçoit clavier/souris du PC (lus par <code>emu</code>)</td><td>à chaque octet</td></tr>
+        <tr><td>ISR VSync I2S1 (FabGL)</td><td><span class="pill c1">1</span></td><td class="n">niv. 1</td><td class="n">—</td><td>file de primitives de dessin FabGL, vide ici</td><td>à chaque trame VGA</td></tr>
+        <tr><td>ISR ULP (PS/2)</td><td><span class="pill c1">1</span></td><td class="n">niv. 2</td><td class="n">—</td><td>réveil sur trame PS/2 reçue par le coprocesseur ULP</td><td>jamais ici (PS/2 absent)</td></tr>
+        <tr><td>FabGL souris / clavier</td><td><span class="pill">libre</span></td><td class="n">5</td><td class="n">1,6 Ko / —</td><td>décodage des paquets PS/2</td><td>bloquées (PS/2 absent)</td></tr>
+        <tr><td><code>IDLE0</code> / <code>IDLE1</code></td><td><span class="pill c0">0</span> <span class="pill c1">1</span></td><td class="n">0</td><td class="n">—</td><td>tâches idle ; le watchdog exige que IDLE0 tourne au moins toutes les 5 s</td><td>quand rien d'autre</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p class="note">ESP-IDF ajoute ses propres tâches de service (<code>esp_timer</code>, <code>ipc0</code>/<code>ipc1</code>, minuteries FreeRTOS), en attente la plupart du temps. Les cœurs sont choisis par FabGL : <code>busiestCore()</code> = cœur 1 (opposé au WiFi, inutilisé ici), <code>quietCore()</code> = cœur 0. WiFi et Bluetooth ne sont pas liés dans le firmware.</p>
+  </section>
+</div>
+</body>
+</html>

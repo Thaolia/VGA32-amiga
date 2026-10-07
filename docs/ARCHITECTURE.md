@@ -78,9 +78,18 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 2. Pour chaque ligne (0..311) : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
    (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne) → `m68k_execute(455)` →
    `paula_step` (colorclock) → `cia_tick` → `cia_tod_hsync`.
-3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` → profiling
-   (`VGA32_DEBUG`) → `vTaskDelay(1)`.
-4. En parallèle, FabGL (cœur occupé) rescanne en continu le FB interne et génère le signal VGA.
+3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` →
+   `disk_switch_poll` → `video_vga_osd_tick` → log `=== frame` (`VGA32_DEBUG`, temps de calcul,
+   attente exclue) → `frame_end_wait` : avec `VGA32_FPS_LIMIT` (défaut 1), attente de l'échéance
+   absolue de 20 ms (jamais plus de 50 trames/s, temps Amiga correct) ; toujours au moins un
+   `vTaskDelay` (watchdog de IDLE0).
+4. En parallèle, le DMA I2S1 de FabGL rescanne en continu le FB interne et génère le signal VGA,
+   sans CPU. Le cœur occupé n'exécute que des tâches courtes (`loopTask` bloquée, `adfload` à la
+   demande, ISR UART0/VSync/ULP). L'ISR audio I2S0 (`SoundGenerator`) est, elle, sur le cœur
+   **calme** (`quietCore()` choisi par FabGL), avec `emu_task`.
+
+Schéma complet des tâches/ISR par cœur : `docs/taches-cores.html` (à ouvrir dans un navigateur ;
+copie en ligne privée : https://claude.ai/artifact/JcpjhFbaR1AqgrUXTcLFZ1).
 
 ## Dual-target / régression
 
