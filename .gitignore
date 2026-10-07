@@ -33,6 +33,7 @@ credentials*
 # ---- Tests hôte HAL : binaire ----
 tests/hal/test_serial_proto
 tests/hal/test_disk_select
+tests/hal/test_vga_pack
 __pycache__/
 
 # ---- Config Claude Code locale à la machine ----

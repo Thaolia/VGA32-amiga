@@ -2,7 +2,7 @@
 CXX      = g++
 CXXFLAGS = -O2 -Wall -Wextra -I../../src/hal
 HAL      = ../../src/hal
-TESTS    = test_serial_proto test_disk_select
+TESTS    = test_serial_proto test_disk_select test_vga_pack
 
 test: $(TESTS)
 	@for t in $(TESTS); do ./$$t || exit 1; done
@@ -12,6 +12,9 @@ test_serial_proto: test_serial_proto.cpp $(HAL)/serial_proto.cpp $(HAL)/serial_p
 
 test_disk_select: test_disk_select.cpp $(HAL)/disk_select.cpp $(HAL)/disk_select.h
 	$(CXX) $(CXXFLAGS) -o $@ test_disk_select.cpp $(HAL)/disk_select.cpp
+
+test_vga_pack: test_vga_pack.cpp $(HAL)/vga_pack.h
+	$(CXX) $(CXXFLAGS) -o $@ test_vga_pack.cpp
 
 clean:
 	rm -f $(TESTS)

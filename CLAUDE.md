@@ -33,8 +33,12 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
-- Référence : boot ~24 fps trame 150, ~34,6 fps au repos, 12-25 fps en accès disque, heap interne
-  libre ~154 Ko (mesuré 2026-10-07 avec audio/clavier/UART ; les ~170 Ko de PORTING datent de la Phase 1). Après toute modif du chemin vidéo/CPU : re-mesurer et comparer à ces chiffres.
+- Référence (2026-10-07, après optimisations Denise) : bureau au repos **12,3 ms de calcul** par
+  trame, boot trames 50→1350 en 44,5 s, heap interne libre ~154 Ko. Le limiteur plafonne à 50 trames/s :
+  mesurer la perf sur le temps de calcul du log `=== frame` (attente exclue), jamais sur les fps réels.
+- Toute écriture mémoire coûte un `memw` (`-mfix-esp32-psram-cache-issue`, puce rev1) : dans le
+  chemin chaud, écrire par mots de 32 bits plutôt que par octets/demi-mots, et supprimer les
+  écritures inutiles. Après toute modif du chemin vidéo/CPU : re-mesurer et comparer à ces chiffres.
 - Régression ≥ 5 % ou trame qui explose → chercher d'abord un conflit de cache flash/PSRAM :
   tout code appelé par ligne (`denise_cb`, `osd_draw_row`, callbacks vidéo) doit être `IRAM_ATTR`.
 - Où part le temps : env `ttgo-vga32-prof` (ligne `[PROF]`, voir `docs/PORTING.md`). Il coûte

@@ -53,7 +53,17 @@ bool g_row_onscreen[FB_H] = {false};  // riga confermata sul display dal dirty-c
 #endif
 #ifdef ARDUINO
 // niente framebuffer intero (400KB non stanno in DRAM): una riga alla volta.
-static uint16_t fb_line[FB_W];
+static uint16_t fb_line[FB_W] __attribute__((aligned(4)));
+/* Portage VGA32 : remplissage de fb_line par mots de 32 bits (2 pixels par memw, inséré après
+ * chaque écriture par -mfix-esp32-psram-cache-issue). may_alias : écriture légale d'un
+ * tableau uint16_t via un pointeur 32 bits. */
+typedef uint32_t __attribute__((may_alias)) fb_word_t;
+static inline void fb_line_fill(uint16_t c)
+{
+    fb_word_t *p = (fb_word_t *)fb_line;
+    const uint32_t v = c | ((uint32_t)c << 16);
+    for (int i = 0; i < FB_W / 2; i++) p[i] = v;
+}
 // callback fornito dallo sketch: riceve (riga_video, pixel RGB565, larghezza)
 void (*denise_line_cb)(int vpos, const uint16_t *pixels, int w) = nullptr;
 // converte Amiga 12-bit (0x0RGB) in RGB565
@@ -294,16 +304,20 @@ void denise_render_line(void)
     DPROF(DP_SPRDMA)
     uint16_t bg = custom_get(0x180);              /* COLOR00 */
 #ifdef ARDUINO
+    /* Portage VGA32 : pas de remplissage de fond ici. Chaque chemin qui livre fb_line au
+     * callback le remplit lui-même (BG_FLUSH, 0 bitplan) ou écrase tous les pixels lus
+     * (ligne dessinée) ; une ligne sautée ne s'en sert pas. Mesuré : 10,5 ms/trame perdus
+     * (memw après chaque écriture, -mfix-esp32-psram-cache-issue). */
     uint16_t *row = fb_line;
 #else
     uint16_t *row = fb[vpos];
-#endif
     for (int x = 0; x < FB_W; x++) row[x] = bg;
+#endif
     DPROF(DP_BGFILL)
 
 #ifdef ARDUINO
 #define BG_FLUSH() do { DPROF(DP_WIN) if (denise_line_cb) { \
-    for (int _x=0;_x<FB_W;_x++) fb_line[_x]=bg; \
+    fb_line_fill(bg); \
     denise_line_cb(vpos, fb_line, 640); } DPROF(DP_CB) DPROF_LINE(DL_BORDER) } while(0)
 #else
 #define BG_FLUSH() do {} while(0)
@@ -325,7 +339,7 @@ void denise_render_line(void)
 #ifdef ARDUINO
         DPROF(DP_WIN)
         if (denise_line_cb) {
-            for (int _x = 0; _x < FB_W; _x++) fb_line[_x] = bg;
+            fb_line_fill(bg);
             sprite_overlay(fb_line, 0);       /* stelle/testo della cracktro */
             denise_line_cb(vpos, fb_line, 640);
         }

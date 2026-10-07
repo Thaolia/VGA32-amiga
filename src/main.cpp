@@ -19,6 +19,7 @@
 #include "fabgl.h"
 #include "esp_heap_caps.h"
 #include "esp_timer.h"
+#include "soc/spi_reg.h"
 
 #include "platform_esp32.h"
 #include "video_vga.h"
@@ -178,6 +179,67 @@ static void prof_report(void)
 #define PROF_MARK(slot) do {} while (0)
 #endif
 
+/* Fin de trame : cede le coeur (le watchdog surveille la tache idle du coeur 0) et, avec
+ * VGA32_FPS_LIMIT, attend l'echeance de la trame. Echeance absolue : la moyenne fait
+ * exactement 50 Hz, un depassement d'un tick est rattrape a la trame suivante. En retard
+ * de plus d'une trame, on repart de maintenant au lieu d'accelerer pour rattraper. */
+static void frame_end_wait(int64_t *deadline)
+{
+#if VGA32_FPS_LIMIT
+    *deadline += VGA32_FRAME_US;
+    int64_t now = esp_timer_get_time();
+    int64_t wait = *deadline - now;
+    if (wait <= 0) {
+        if (wait < -VGA32_FRAME_US) *deadline = now;
+        vTaskDelay(1);
+        return;
+    }
+    /* vTaskDelay(n) bloque entre n-1 et n ms : floor() ne depasse pas l'echeance ;
+     * le reste (< 1 ms) en attente active */
+    TickType_t ticks = (TickType_t)(wait / 1000);
+    vTaskDelay(ticks ? ticks : 1);
+    while (esp_timer_get_time() < *deadline) { }
+#else
+    (void)deadline;
+    vTaskDelay(1);
+#endif
+}
+
+#if VGA32_DEBUG
+/* Diagnostic PSRAM au boot : horloges SPI0 (cache flash + PSRAM) / SPI1 et debit mesure.
+ * La frequence PSRAM est fixee par le SDK precompile (CONFIG_SPIRAM_SPEED_*) a l'init,
+ * avant setup() : on la constate ici, on ne la change pas (le code s'execute via ce cache). */
+static uint32_t spi_clk_mhz10(uint32_t reg)
+{
+    if (reg & SPI_CLK_EQU_SYSCLK) return 800;                 /* = APB 80 MHz */
+    uint32_t pre = (reg >> SPI_CLKDIV_PRE_S) & SPI_CLKDIV_PRE;
+    uint32_t n   = (reg >> SPI_CLKCNT_N_S) & SPI_CLKCNT_N;
+    return 800 / ((pre + 1) * (n + 1));                       /* en dixiemes de MHz */
+}
+static void psram_diag(const uint8_t *buf, size_t len)
+{
+    uint32_t c0 = REG_READ(SPI_CLOCK_REG(0)), c1 = REG_READ(SPI_CLOCK_REG(1));
+    uint32_t d0 = REG_READ(SPI_DATE_REG(0));
+    Serial.printf("[PSRAM] SPI0 clock=%08X (%u.%u MHz) SPI1 clock=%08X (%u.%u MHz) SPI0 date[31:30]=%u%u\n",
+                  (unsigned)c0, (unsigned)(spi_clk_mhz10(c0) / 10), (unsigned)(spi_clk_mhz10(c0) % 10),
+                  (unsigned)c1, (unsigned)(spi_clk_mhz10(c1) / 10), (unsigned)(spi_clk_mhz10(c1) % 10),
+                  (unsigned)((d0 >> 31) & 1), (unsigned)((d0 >> 30) & 1));
+    /* lecture sequentielle 32 bits : len >> 32 Ko de cache -> chaque ligne de 32 o vient de la PSRAM */
+    const volatile uint32_t *p = (const volatile uint32_t *)buf;
+    uint32_t acc = 0;
+    int64_t t = esp_timer_get_time();
+    for (size_t i = 0; i < len / 4; i++) acc += p[i];
+    int64_t dt = esp_timer_get_time() - t;
+    /* une lecture par ligne de cache : cout d'un remplissage de ligne (latence + transfert) */
+    t = esp_timer_get_time();
+    for (size_t i = 0; i < len / 4; i += 8) acc += p[i];
+    int64_t dl = esp_timer_get_time() - t;
+    Serial.printf("[PSRAM] lecture seq %u Ko : %lld us (%.1f Mo/s) | 1 lecture/ligne : %.2f us/ligne (chk %08X)\n",
+                  (unsigned)(len / 1024), (long long)dt, dt > 0 ? (double)len / dt : 0.0,
+                  (double)dl / (len / 32), (unsigned)acc);
+}
+#endif
+
 /* ---- tache emulateur : boucle trame, sur le coeur calme ---- */
 static void emu_task(void *arg)
 {
@@ -196,6 +258,7 @@ static void emu_task(void *arg)
                   m68k_get_reg(NULL, M68K_REG_PC));
 
     int paula_cc_acc = 0;
+    int64_t frame_deadline = esp_timer_get_time();
 #if VGA32_PROF
     s_prof_t = prof_ccount();
 #endif
@@ -258,7 +321,7 @@ static void emu_task(void *arg)
             s_prof_t = prof_ccount();      /* le print [PROF] n'est impute a aucune etape */
         }
 #endif
-        vTaskDelay(1);                     /* nourrit le watchdog du coeur calme */
+        frame_end_wait(&frame_deadline);   /* watchdog + plafond 50 trames/s */
         PROF_MARK(P_YIELD);
     }
 }
@@ -281,6 +344,9 @@ void setup(void)
     }
     memset(chip_ram, 0, CHIP_SIZE);
     memset(slow_ram, 0, SLOW_SIZE);
+#if VGA32_DEBUG
+    psram_diag(chip_ram, CHIP_SIZE);
+#endif
 
     /* 2. Kickstart + ADF (depuis headers embarques) */
     if (!load_kickstart()) { Serial.println("STOP: pas de Kickstart."); return; }

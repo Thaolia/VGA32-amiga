@@ -16,6 +16,7 @@
 #include "fabgl.h"
 #include "platform_esp32.h"
 #include "video_vga.h"
+#include "vga_pack.h"
 #include "a500.h"   /* coeur compile en C++ : liaison C++, PAS d'extern "C" ici */
 
 /* confirmée côté cœur par video.cpp : indexée par vpos Amiga (0..311), remise à
@@ -25,6 +26,7 @@ extern bool g_row_onscreen[];
 
 static fabgl::VGAController s_vga;
 static uint8_t s_lut[4096];   /* OCS 12 bits -> octet pixel natif FabGL (RGB222 + sync) */
+static bool    s_row32;       /* scanlines alignées sur 4 : écriture par mots (vga_pack4) */
 
 /* ---- Surimpression (OSD) ----
  * Le cœur saute les lignes inchangées : un texte posé une fois reste donc affiché,
@@ -112,7 +114,16 @@ static void IRAM_ATTR denise_cb(int v, const uint16_t *pixels, int w)
     int dy = v - VGA32_VSTART;
     if (dy >= 0 && dy < VGA32_ACTIVE_H) {
         uint8_t *row = s_vga.getScanline(dy);
-        if (w >= 640) {
+        if (s_row32 && w >= 320) {
+            /* 4 pixels par mot de 32 bits : 1 memw au lieu de 4 */
+            uint32_t *row32 = (uint32_t *)row;
+            const int step = (w >= 640) ? 2 : 1;      /* hires : 1 pixel sur 2 */
+            for (int k = 0; k < VGA32_ACTIVE_W / 4; k++) {
+                const uint16_t *p = pixels + 4 * k * step;
+                row32[k] = vga_pack4(s_lut[p[0] & 0xFFF], s_lut[p[step] & 0xFFF],
+                                     s_lut[p[2 * step] & 0xFFF], s_lut[p[3 * step] & 0xFFF]);
+            }
+        } else if (w >= 640) {
             /* hires : on décime 640 -> 320 (1 pixel sur 2) */
             for (int x = 0; x < VGA32_ACTIVE_W; x++)
                 row[x ^ 2] = s_lut[pixels[x * 2] & 0xFFF];
@@ -151,12 +162,18 @@ void video_vga_init(void)
         s_lut[c] = s_vga.createRawPixel(fabgl::RGB222(r >> 2, g >> 2, b >> 2));
     }
 
-    /* écran noir au démarrage */
+    /* écran noir au démarrage ; vérifie au passage l'alignement des scanlines (le DMA I2S
+     * les veut alignées sur 4, mais on ne parie pas dessus pour les écritures par mots) */
+    static_assert(VGA32_ACTIVE_W % 4 == 0, "largeur VGA non multiple de 4");
+    s_row32 = true;
     for (int y = 0; y < VGA32_ACTIVE_H; y++) {
         uint8_t *row = s_vga.getScanline(y);
+        if ((uintptr_t)row & 3) s_row32 = false;
         for (int x = 0; x < VGA32_ACTIVE_W; x++)
             row[x ^ 2] = s_lut[0];
     }
+    if (!s_row32)
+        Serial.println("ATTENTION: scanlines VGA non alignees sur 4 -> ecriture octet par octet");
 
     denise_line_cb = denise_cb;
 }

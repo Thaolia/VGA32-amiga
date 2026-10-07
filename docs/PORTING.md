@@ -116,6 +116,43 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Optimisations Denise + limiteur 50 Hz (2026-10-07)
+
+Mesures sur la carte, firmware normal (Workbench embarqué, sans SD), temps réel horodaté côté PC
+par bloc de 50 trames (`=== frame`) ; « boot » = temps pour aller de la trame 50 à la trame 1350
+(émulation déterministe, même travail).
+
+| Étape | Boot 50→1350 | Bureau au repos |
+|---|---|---|
+| Référence | 63,1 s | 28,9 ms/trame (34,6 fps) |
+| 1. pas de remplissage de fond en tête de ligne (`ARDUINO`) | 49,2 s | 17,8 ms |
+| 2. écritures par mots : `fb_line_fill` (2 px) + `denise_cb` (4 px, `vga_pack4`) | 44,5 s | 14,2 ms |
+| 3. limiteur 50 Hz | — | 20,0 ms réels, **12,3 ms de calcul** |
+
+- 1 : `core/video.cpp`, remplissage gardé pour le PC seulement (voir commentaire). Chaque chemin
+  ARDUINO qui livre `fb_line` le remplit ou écrase tous les pixels lus.
+- 2 : `fb_line` aligné sur 4, écrit via un type `may_alias`. `src/hal/vga_pack.h` (pur, testé :
+  `tests/hal/test_vga_pack`, comparé octet par octet à `row[x ^ 2]`) range 4 pixels dans un mot en
+  respectant l'entrelacement FabGL ; `video_vga_init` vérifie l'alignement des scanlines (sinon
+  repli octet par octet, message au boot). `denise_cb` reste en IRAM, sans appel externe.
+  **Image à valider visuellement** (lores Kickstart et hires Workbench) : le log série ne voit pas
+  un ordre d'octets faux.
+- 3 : `frame_end_wait` (`main.cpp`) : échéance absolue (moyenne exacte de 50 Hz, un dépassement de
+  tick est rattrapé), retard > 1 trame → on repart de maintenant (pas d'accélération de
+  rattrapage). Plus lent que 50 fps : même comportement qu'avant (`vTaskDelay(1)`).
+  Pour mesurer la perf, lire le temps de calcul du log `=== frame` (attente exclue), plus le
+  temps réel.
+
+## PSRAM : 80 MHz (mesuré au boot)
+
+`psram_diag()` (`main.cpp`, sous `VGA32_DEBUG`) : `SPI0 clock=80000000 (80.0 MHz)`
+(`CLK_EQU_SYSCLK`), bits `SPI_DATE_REG(0)[31:30]=00` (flash et PSRAM à la même vitesse), lecture
+séquentielle de 512 Ko à **23,2 Mo/s**, 1,2 µs par ligne de cache de 32 o. Cohérent avec du QSPI à
+80 MHz (40 Mo/s brut). Le SDK précompilé fixe `CONFIG_SPIRAM_SPEED_80M` et la flash à 80 MHz
+(l'en-tête 40 MHz de `esp32dev` ne vaut que pour le bootloader). 80 MHz est le maximum de la PSRAM
+quad sur ESP32 : rien à gagner ; la fréquence ne se change pas à l'exécution (le code s'exécute via
+ce même cache SPI0).
+
 ## Profiling de la boucle trame (`ttgo-vga32-prof`, 2026-10-07)
 
 `VGA32_PROF=1` : `main.cpp` lit le compteur de cycles (`ccount`) entre chaque étape de la boucle

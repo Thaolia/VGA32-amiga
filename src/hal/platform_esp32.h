@@ -87,6 +87,14 @@
 #define VGA32_DEBUG   1
 #endif
 
+/* ---- Limiteur de vitesse ----
+ * Un A500 PAL affiche 50 trames/s : plus vite, le temps Amiga s'accélère (horloge, souris,
+ * audio produit plus vite que le DAC ne le consomme). 1 = jamais plus de 50 trames/s. */
+#ifndef VGA32_FPS_LIMIT
+#define VGA32_FPS_LIMIT  1
+#endif
+#define VGA32_FRAME_US   20000              /* 1 trame PAL = 20 ms */
+
 /* Profiling par étape de la boucle trame (ligne [PROF] toutes les 50 trames), via le compteur
  * de cycles CPU (ccount). OFF par défaut : mesuré +2,1 ms/trame au repos (34,6 -> 32,2 fps),
  * surtout par effet de disposition du binaire sur le cache flash/PSRAM, pas par le calcul
