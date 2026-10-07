@@ -32,3 +32,6 @@ credentials*
 tests/hal/test_serial_proto
 tests/hal/test_disk_select
 __pycache__/
+
+# ---- Config Claude Code locale à la machine ----
+CLAUDE.local.md

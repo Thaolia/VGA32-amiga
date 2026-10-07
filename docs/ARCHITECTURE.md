@@ -84,5 +84,7 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 
 ## Dual-target / régression
 
-`tests/pc/` est le *ground truth* : mêmes sources chipset, rendu PPM/BMP/WAV, 10 sentinelles.
+`tests/pc/` est le *ground truth* : rendu PPM/BMP/WAV, 8 sentinelles (6 synthétiques + `testboot`/`testmfm`
+qui exigent Kickstart/ADF). **Attention** : il compile sa propre copie `tests/pc/src/`, qui diverge de
+`src/core/` (constaté 2026-10-07 : 7 fichiers sur 10) — une modif cœur doit être reportée dans les deux arbres.
 Toute modif du cœur doit garder les sentinelles vertes avant d'atteindre la cible.
