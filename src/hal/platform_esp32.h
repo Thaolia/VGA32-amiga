@@ -107,6 +107,12 @@
 #define VGA32_PSRAM_STRESS 0
 #endif
 
+/* Histogramme des opcodes 68000 (src/hal/opc_hist.c) : relevé ponctuel pour choisir les handlers
+ * Musashi à placer en IRAM. 0 dans tous les firmwares normaux. */
+#ifndef VGA32_OPC_HIST
+#define VGA32_OPC_HIST 0
+#endif
+
 /* ---- Limiteur de vitesse ----
  * Un A500 PAL affiche 50 trames/s : plus vite, le temps Amiga s'accélère (horloge, souris,
  * audio produit plus vite que le DAC ne le consomme). 1 = jamais plus de 50 trames/s. */

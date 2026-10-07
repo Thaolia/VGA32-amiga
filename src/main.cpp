@@ -32,6 +32,10 @@
 #include "serial_kbd.h"
 #include "zorro.h"
 #include "psram_stress.h"
+#if VGA32_OPC_HIST
+extern "C" void opc_hist_reset(void);
+extern "C" void opc_hist_dump(int n);
+#endif
 
 #include "a500.h"            /* coeur emulateur (C++) */
 /* inconditionnel : le LDF PlatformIO (deep+) ne voit pas VGA32_EMBED_ADF et retirerait
@@ -349,6 +353,10 @@ static void emu_task(void *arg)
                           cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] : 0,
                           cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] / 8 : 0);
         }
+#if VGA32_OPC_HIST
+        if (cur_frame == 1000) opc_hist_reset();
+        if (cur_frame == 2000) opc_hist_dump(120);
+#endif
 #if VGA32_PSRAM_STRESS
         if ((cur_frame % 500) == 0)
             Serial.printf("[CRC] trame %d : RAM Amiga %08X | stress PSRAM %u passes, %u erreurs\n",

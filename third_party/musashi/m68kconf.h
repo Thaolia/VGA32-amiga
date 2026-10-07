@@ -84,6 +84,17 @@
 #define M68K_EMULATE_040            M68K_OPT_OFF
 #endif
 
+/* Portage VGA32 : code chaud en IRAM (hors du cache flash, partagé avec la PSRAM). M68K_HOT marque
+ * m68k_execute et les 120 handlers les plus exécutés : relevé de l'histogramme d'opcodes
+ * (VGA32_OPC_HIST, démo Lemmings, 11,1 M instructions) ; ils couvrent 99,99 % des instructions pour
+ * ~8,5 Ko de code. Vide hors cible. */
+#if defined(ARDUINO) && !defined(M68K_HOT)
+#include "esp_attr.h"
+#define M68K_HOT IRAM_ATTR
+#elif !defined(M68K_HOT)
+#define M68K_HOT
+#endif
+
 /* Portage VGA32 : erreurs de bus (m68k_pulse_bus_error). Activées, Musashi copie les 16 registres
  * D/A avant CHAQUE instruction pour pouvoir les restaurer ; sur l'ESP32 rev1, chaque écriture est
  * suivie d'un memw (~200 cycles par instruction mesurés au total). L'émulateur A500 ne déclenche

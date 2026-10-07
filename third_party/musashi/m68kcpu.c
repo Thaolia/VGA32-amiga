@@ -99,6 +99,9 @@ jmp_buf m68ki_bus_error_jmp_buf;
 #if defined(ARDUINO) && defined(VGA32_PROF) && VGA32_PROF
 uint32_t vga32_m68k_instr;                   /* portage VGA32 : instructions exécutées */
 #endif
+#if defined(VGA32_OPC_HIST) && VGA32_OPC_HIST
+void vga32_opc_hit(unsigned op);             /* portage VGA32 : src/hal/opc_hist.c */
+#endif
 
 /* Used by shift & rotate instructions */
 const uint8 m68ki_shift_8_table[65] =
@@ -966,7 +969,7 @@ void m68k_set_cpu_type(unsigned int cpu_type)
 
 /* Execute some instructions until we use up num_cycles clock cycles */
 /* ASG: removed per-instruction interrupt checks */
-int m68k_execute(int num_cycles)
+int M68K_HOT m68k_execute(int num_cycles)
 {
 	/* eat up any reset cycles */
 	if (RESET_CYCLES) {
@@ -1022,6 +1025,9 @@ int m68k_execute(int num_cycles)
 			vga32_m68k_instr++;          /* portage VGA32 : profiling (env ttgo-vga32-prof) */
 #endif
 			REG_IR = m68ki_read_imm_16();
+#if defined(VGA32_OPC_HIST) && VGA32_OPC_HIST
+			vga32_opc_hit(REG_IR);       /* portage VGA32 : histogramme (src/hal/opc_hist.c) */
+#endif
 			m68ki_instruction_jump_table[REG_IR]();
 			USE_CYCLES(CYC_INSTRUCTION[REG_IR]);
 

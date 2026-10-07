@@ -150,9 +150,24 @@ accès Amiga passent par `memory.cpp` ; seules les tables sont écrites, une foi
 Vérifié dans l'ELF : 0 `memw` dans `m68k_execute` et tous les `m68k_op_*`, `memw` conservés dans
 `memory.cpp` et les deux fonctions de tables. Endurance : 2 runs stress + CRC de 150 s, CRC identiques à
 la référence aux 5 points, 0 erreur sur ~6 300 passes chacun. Lemmings **37,1 → 35,9 ms (27,8 fps)**.
-Gain plus faible qu'attendu : les `memw` n'étaient qu'une petite part du « reste ». Suspect suivant :
-les 2 043 handlers `m68k_op_*` (153 Ko en flash, mesuré) lus via le cache de 32 Ko partagé avec la
-PSRAM ; piste : histogramme des opcodes (env prof), handlers les plus fréquents en IRAM (~40 Ko libres).
+Gain plus faible qu'attendu : les `memw` n'étaient qu'une petite part du « reste ».
+
+**Handlers chauds en IRAM (fait).** Histogramme des opcodes (`src/hal/opc_hist.c`, drapeau
+`VGA32_OPC_HIST`, compteur de 256 Ko en PSRAM incrémenté hors de Musashi, relevé trames 1000-2000 de la
+démo Lemmings, mesure faite avec `VGA32_FASTRAM2_KB=0` pour la place) : 11,1 M instructions ;
+`beq_8` 22,9 %, `andi_16_di` 22,1 % ; les 10 premiers handlers couvrent 75 %, les 59 premiers 99 %
+(4 Ko de code), les 120 premiers 99,99 % (8,5 Ko). Les 2 043 handlers font 153 Ko en flash, lus via le
+cache de 32 Ko partagé avec la PSRAM. `M68K_HOT` (`m68kconf.h`, = `IRAM_ATTR` sur la cible) marque ces
+120 handlers et `m68k_execute` : IRAM 87,7 → 97,9 Ko / 128 Ko.
+
+| Variante | Lemmings ms/trame | fps |
+|---|---|---|
+| Avant | 35,9 | 27,8 |
+| **A : 120 handlers + `m68k_execute` en IRAM** | **33,3** | **30,0** |
+| B : A + accesseurs mémoire (`memory.cpp`) en IRAM | 33,7 | non retenue |
+
+CRC de la RAM Amiga identiques à la référence (env stress). La liste vient d'un seul jeu : un autre
+logiciel peut avoir d'autres handlers chauds (refaire l'histogramme s'il est visé).
 
 **Rendu Denise sur le cœur 1 (étude, non fait)** : déplaçable = conversion des pixels (1,85 ms),
 sprites, envoi VGA (2,38 ms) ; reste sur le cœur 0 = lecture des bitplanes, décision de saut,
