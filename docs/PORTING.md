@@ -116,6 +116,22 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Variante Kickstart seul (`ttgo-vga32-kickonly`)
+
+`VGA32_EMBED_ADF` (`platform_esp32.h`, défaut 1) : à 0, `main.cpp` n'inclut pas `wb_adf.h` et n'a
+plus de repli embarqué ; sans `wb.adf` sur la SD, `load_workbench` rend `false` → Kickstart à
+l'invite disque, IO36 charge un ADF de la SD (le buffer ADF reste alloué). Env pio dédié
+`ttgo-vga32-kickonly` (`-DVGA32_EMBED_ADF=0`) : Flash 889 257 o contre 1 243 661 o.
+- `#include "sinfl.h"` reste **inconditionnel** : le LDF PlatformIO (`deep+`) évalue les `#if` sans
+  voir la macro (définie dans un header) et retirait `sinfl` du build par défaut → `undefined
+  reference to zsinflate`. Dans la variante, `zsinflate` non référencé est éliminé au link.
+- Build par défaut inchangé : sections chargées de l'ELF identiques avant/après.
+- **Validé sur la carte (2026-10-07, sans SD)** : `[RESET] PC=FC00D2`, Kickstart jusqu'à l'accès
+  disque (step piste 0/1, « nessun disco »), aucun panic ; trames 50/100/150 = 19,4 / 14,6 / 24,0 fps,
+  identiques au firmware par défaut mesuré dans les mêmes conditions. Heap interne libre 154 272 o
+  dans les **deux** firmwares : la baisse depuis les ~170 Ko de la Phase 1 vient des phases 2-3,
+  pas de cette variante.
+
 ## Harnais PC : source unique (2026-10-07)
 
 **Constat** : `tests/pc/` compilait sa propre copie du cœur (`tests/pc/src/*.cpp`, héritée du `pc/`

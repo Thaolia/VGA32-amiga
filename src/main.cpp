@@ -30,6 +30,8 @@
 #include "serial_kbd.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
+/* inconditionnel : le LDF PlatformIO (deep+) ne voit pas VGA32_EMBED_ADF et retirerait
+   sinfl du build par defaut ; sans ADF embarque, zsinflate est elimine au link */
 #include "sinfl.h"           /* zsinflate (declaration) */
 extern "C" {
   #include "m68k.h"          /* Musashi (C) */
@@ -37,7 +39,9 @@ extern "C" {
 
 /* headers generes depuis VOS fichiers (git-ignores, dans assets/) */
 #include "kick_rom.h"        /* kickstart_rom[] (== ROM_SIZE) */
+#if VGA32_EMBED_ADF
 #include "wb_adf.h"          /* WB_ADF_SIZE, wb_adf_comp[], WB_ADF_COMP_SIZE */
+#endif
 
 /* ---- globals possedes par la couche plateforme (comme l'ancien .ino) ---- */
 extern uint8_t *slow_ram;    /* defini dans core/memory.cpp (non declare dans a500.h) */
@@ -60,6 +64,7 @@ static bool load_kickstart(void)
     return true;
 }
 
+#if VGA32_EMBED_ADF
 /* ---- decompression de l'ADF Workbench (zlib) en PSRAM ----
  * zsinflate consomme beaucoup de pile (tables Huffman) : on le lance dans une
  * tache dediee a grande pile, pinnee sur le coeur calme. */
@@ -70,6 +75,7 @@ static void decomp_task(void *arg)
     s_wb_result = zsinflate(dst, WB_ADF_SIZE, wb_adf_comp, WB_ADF_COMP_SIZE);
     vTaskDelete(NULL);
 }
+#endif
 /* *sd_idx = index SD de l'ADF insere (-1 : ADF embarque ou aucun) */
 static bool load_workbench(int *sd_idx)
 {
@@ -85,6 +91,7 @@ static bool load_workbench(int *sd_idx)
         *sd_idx = i;
         return true;
     }
+#if VGA32_EMBED_ADF
     Serial.printf("[WB] %s absent/illisible sur la SD -> repli sur l'ADF embarque (wb_adf.h)\n",
                   VGA32_ADF_FILENAME);
 
@@ -101,6 +108,12 @@ static bool load_workbench(int *sd_idx)
     drive_mount_ready();
     Serial.printf("ADF monte: %u octets\n", (unsigned)WB_ADF_SIZE);
     return true;
+#else
+    /* build Kickstart seul : le buffer ADF reste alloue, disk_switch le reutilise (IO36) */
+    Serial.printf("[WB] %s absent/illisible sur la SD, pas d'ADF embarque -> invite disque "
+                  "(IO36 : choisir un ADF de la SD)\n", VGA32_ADF_FILENAME);
+    return false;
+#endif
 }
 
 /* ---- tache emulateur : boucle trame, sur le coeur calme ---- */

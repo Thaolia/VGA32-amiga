@@ -43,6 +43,11 @@
 #define VGA32_SD_MISO       2
 #define VGA32_ADF_SIZE     901120u          /* ADF DD standard (= ADF_SIZE de drive.cpp) */
 #define VGA32_ADF_FILENAME "wb.adf"         /* ADF insere au boot s'il est sur la SD */
+/* 1 : ADF de repli embarque (assets/wb_adf.h). 0 : Kickstart seul, disquettes depuis la SD
+ * uniquement (env pio ttgo-vga32-kickonly) ; sans wb.adf sur la SD, boot a l'invite disque. */
+#ifndef VGA32_EMBED_ADF
+#define VGA32_EMBED_ADF    1
+#endif
 
 /* ---- Bouton de changement de disquette ----
  * K1 du schema v1.4 : S_VP = GPIO36 (input-only), pull-up 10K externe, appui = 0. */

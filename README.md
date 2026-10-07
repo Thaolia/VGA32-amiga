@@ -42,6 +42,10 @@ python3 tools/make_adf_header.py  /chemin/vers/workbench13.adf  assets # -> asse
 
 # 2. Compiler (côté Linux/WSL2)
 pio run -e ttgo-vga32
+
+# Variante « Kickstart seul » : aucun ADF embarqué (assets/wb_adf.h inutile), firmware ~354 Ko
+# plus léger. Les disquettes viennent uniquement de la SD ; sans wb.adf, boot à l'invite disque.
+pio run -e ttgo-vga32-kickonly    # -> .pio/build/ttgo-vga32-kickonly/firmware.bin
 ```
 
 > **Disquettes sur la carte SD** : la carte VGA32 v1.4 a un slot microSD embarqué. Formatez-la en

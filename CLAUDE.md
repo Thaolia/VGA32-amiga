@@ -34,7 +34,7 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
 - Référence : boot ~24 fps trame 150, ~34,6 fps au repos, 12-25 fps en accès disque, heap interne
-  libre ~170 Ko. Après toute modif du chemin vidéo/CPU : re-mesurer et comparer à ces chiffres.
+  libre ~154 Ko (mesuré 2026-10-07 avec audio/clavier/UART ; les ~170 Ko de PORTING datent de la Phase 1). Après toute modif du chemin vidéo/CPU : re-mesurer et comparer à ces chiffres.
 - Régression ≥ 5 % ou trame qui explose → chercher d'abord un conflit de cache flash/PSRAM :
   tout code appelé par ligne (`denise_cb`, `osd_draw_row`, callbacks vidéo) doit être `IRAM_ATTR`.
 - Plancher absolu : ≥ 10 fps soutenu ET heap interne ≥ 40 Ko ET VGA stable. Sous ce plancher :

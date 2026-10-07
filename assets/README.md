@@ -12,4 +12,5 @@ Le build (`platformio.ini`, `-Iassets`) cherche ces fichiers ici. Sans eux, la c
 échoue sur `#include "kick_rom.h"`.
 
 > Alternative pour l'ADF : le charger depuis une **carte SD** au runtime plutôt que de l'embarquer
-> (voir `docs/PORTING.md`). Le Kickstart, lui, reste embarqué.
+> (voir `docs/PORTING.md`). Le Kickstart, lui, reste embarqué. L'env `ttgo-vga32-kickonly`
+> (`-DVGA32_EMBED_ADF=0`) n'a besoin que de `kick_rom.h`.
