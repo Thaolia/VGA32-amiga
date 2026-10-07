@@ -95,8 +95,20 @@ void video_vga_osd_tick(void)
 
 /* callback appelé par denise_render_line() pour chaque ligne video Amiga.
  * w = 320 (lores, 1:1) ou 640 (hires, décimation /2). pixels[x] & 0xFFF = couleur. */
+#if VGA32_PROF
+static uint32_t s_prof_cb_cyc, s_prof_cb_lines;
+void video_vga_prof_take(uint32_t *cycles, uint32_t *lines)
+{
+    *cycles = s_prof_cb_cyc;  s_prof_cb_cyc = 0;
+    *lines  = s_prof_cb_lines; s_prof_cb_lines = 0;
+}
+#endif
+
 static void IRAM_ATTR denise_cb(int v, const uint16_t *pixels, int w)
 {
+#if VGA32_PROF
+    uint32_t prof_t0 = prof_ccount();
+#endif
     int dy = v - VGA32_VSTART;
     if (dy >= 0 && dy < VGA32_ACTIVE_H) {
         uint8_t *row = s_vga.getScanline(dy);
@@ -118,6 +130,10 @@ static void IRAM_ATTR denise_cb(int v, const uint16_t *pixels, int w)
     /* ligne Amiga confirmée affichée (requis par le skip-calcul de video.cpp) */
     if (v >= 0 && v < 312)
         g_row_onscreen[v] = true;
+#if VGA32_PROF
+    s_prof_cb_cyc += prof_ccount() - prof_t0;
+    s_prof_cb_lines++;
+#endif
 }
 
 void video_vga_init(void)

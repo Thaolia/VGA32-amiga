@@ -19,4 +19,10 @@ void video_vga_osd_show(const char *text, uint32_t ms);
 /* Retire la surimpression à échéance. À appeler une fois par trame depuis emu_task. */
 void video_vga_osd_tick(void);
 
+#if VGA32_PROF
+/* Cycles CPU passés dans le callback Denise (conversion -> framebuffer VGA) et nombre de
+ * lignes écrites depuis le dernier appel ; remet les compteurs à zéro. */
+void video_vga_prof_take(uint32_t *cycles, uint32_t *lines);
+#endif
+
 #endif /* VIDEO_VGA_H */

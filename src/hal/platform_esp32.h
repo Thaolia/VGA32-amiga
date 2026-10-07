@@ -87,4 +87,21 @@
 #define VGA32_DEBUG   1
 #endif
 
+/* Profiling par étape de la boucle trame (ligne [PROF] toutes les 50 trames), via le compteur
+ * de cycles CPU (ccount). OFF par défaut : mesuré +2,1 ms/trame au repos (34,6 -> 32,2 fps),
+ * surtout par effet de disposition du binaire sur le cache flash/PSRAM, pas par le calcul
+ * (~0,1 ms). Les % restent exploitables, les fps absolus sont pessimistes d'autant.
+ * Activer : env pio ttgo-vga32-prof (-DVGA32_PROF=1). */
+#ifndef VGA32_PROF
+#define VGA32_PROF    0
+#endif
+#if VGA32_PROF
+static inline uint32_t prof_ccount(void)
+{
+    uint32_t c;
+    __asm__ __volatile__("rsr %0, ccount" : "=a"(c));
+    return c;
+}
+#endif
+
 #endif /* PLATFORM_ESP32_H */

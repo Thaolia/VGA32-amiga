@@ -116,6 +116,50 @@ static bool load_workbench(int *sd_idx)
 #endif
 }
 
+#if VGA32_PROF
+/* Profiling de la boucle trame : cycles CPU cumules par etape, publies toutes les
+ * PROF_WINDOW trames. PROF_MARK impute le temps ecoule depuis la marque precedente. */
+enum { P_FRAME, P_COPPER, P_DENISE, P_CPU, P_PAULA, P_CIA, P_POST, P_YIELD, P_N };
+static const char *const PROF_NAME[P_N] = {
+    "trame", "copper", "denise", "cpu", "paula", "cia", "post", "yield" };
+#define PROF_WINDOW 50
+static uint64_t s_prof[P_N];
+static uint32_t s_prof_t;
+#define PROF_MARK(slot) do { uint32_t _n = prof_ccount(); s_prof[slot] += _n - s_prof_t; \
+                             s_prof_t = _n; } while (0)
+
+static void prof_report(void)
+{
+    static long long blit_ns_prev;
+    static uint32_t  blit_count_prev;
+    const double mhz = getCpuFrequencyMhz();
+    uint64_t total = 0;
+    for (int i = 0; i < P_N; i++) total += s_prof[i];
+    uint32_t cb_cyc, cb_lines;
+    video_vga_prof_take(&cb_cyc, &cb_lines);
+    long long blit_ns = blitter_ns();
+    double blit_ms = (blit_ns - blit_ns_prev) / 1e6 / PROF_WINDOW;
+    uint32_t blits = blit_count - blit_count_prev;
+    blit_ns_prev = blit_ns;
+    blit_count_prev = blit_count;
+
+    double frame_ms = total / mhz / 1000.0 / PROF_WINDOW;
+    Serial.printf("[PROF] %d tr: %.2f ms/tr (%.1f fps) |", PROF_WINDOW, frame_ms,
+                  frame_ms > 0 ? 1000.0 / frame_ms : 0.0);
+    for (int i = 0; i < P_N; i++)
+        Serial.printf(" %s %.2f (%.0f%%)", PROF_NAME[i], s_prof[i] / mhz / 1000.0 / PROF_WINDOW,
+                      total ? 100.0 * s_prof[i] / total : 0.0);
+    /* blit : execute dans m68k_execute (ecriture BLTSIZE) -> inclus dans cpu.
+     * vga_cb : callback Denise -> inclus dans denise. */
+    Serial.printf(" | dont blit %.2f (%u/tr) | dont vga_cb %.2f, %u lignes/tr\n",
+                  blit_ms, (unsigned)(blits / PROF_WINDOW),
+                  cb_cyc / mhz / 1000.0 / PROF_WINDOW, (unsigned)(cb_lines / PROF_WINDOW));
+    for (int i = 0; i < P_N; i++) s_prof[i] = 0;
+}
+#else
+#define PROF_MARK(slot) do {} while (0)
+#endif
+
 /* ---- tache emulateur : boucle trame, sur le coeur calme ---- */
 static void emu_task(void *arg)
 {
@@ -134,6 +178,9 @@ static void emu_task(void *arg)
                   m68k_get_reg(NULL, M68K_REG_PC));
 
     int paula_cc_acc = 0;
+#if VGA32_PROF
+    s_prof_t = prof_ccount();
+#endif
     for (;;) {
         int64_t t0 = esp_timer_get_time();
         cur_frame++;
@@ -145,6 +192,7 @@ static void emu_task(void *arg)
         input_frame(cur_frame);
         copper_vblank();
         sprite_vblank();
+        PROF_MARK(P_FRAME);
 
         for (int line = 0; line < LINES_PAL; line++) {
             vpos = line;
@@ -152,23 +200,29 @@ static void emu_task(void *arg)
             if (disk_irq_pending) { disk_irq_pending = 0; intreq_set(1); }
 
             copper_run_line();
+            PROF_MARK(P_COPPER);
             denise_render_line();          /* -> denise_line_cb (video_vga) */
+            PROF_MARK(P_DENISE);
             m68k_execute(CYC_LINE);
+            PROF_MARK(P_CPU);
 
             /* Paula avance en colorclock (~3.546 MHz), pas en cycles CPU :
              * CYC_LINE/2 avec accumulateur pour ne pas perdre le demi-cycle. */
             paula_cc_acc += CYC_LINE;
             paula_step(paula_cc_acc >> 1);
             paula_cc_acc &= 1;
+            PROF_MARK(P_PAULA);
 
             cia_tick(CYC_LINE / 10);
             cia_tod_hsync();
+            PROF_MARK(P_CIA);
         }
         cia_tod_vsync();
         intreq_set(5);                     /* VBlank */
         kbd_amiga_step();                  /* emission serie clavier (stub Phase 0) */
         disk_switch_poll();                /* bouton IO36 : changement de disquette DF0 */
         video_vga_osd_tick();              /* fin de la surimpression du nom de disquette */
+        PROF_MARK(P_POST);
 
 #if VGA32_DEBUG
         if ((cur_frame % 50) == 0) {
@@ -179,7 +233,15 @@ static void emu_task(void *arg)
                           (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
         }
 #endif
+#if VGA32_PROF
+        PROF_MARK(P_POST);                 /* le print "=== frame" ci-dessus reste dans post */
+        if ((cur_frame % PROF_WINDOW) == 0) {
+            prof_report();
+            s_prof_t = prof_ccount();      /* le print [PROF] n'est impute a aucune etape */
+        }
+#endif
         vTaskDelay(1);                     /* nourrit le watchdog du coeur calme */
+        PROF_MARK(P_YIELD);
     }
 }
 

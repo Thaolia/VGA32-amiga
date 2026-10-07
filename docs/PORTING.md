@@ -116,6 +116,42 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Profiling de la boucle trame (`ttgo-vga32-prof`, 2026-10-07)
+
+`VGA32_PROF=1` : `main.cpp` lit le compteur de cycles (`ccount`) entre chaque étape de la boucle
+ligne et publie toutes les 50 trames une ligne `[PROF]` : ms/trame par étape (`trame`, `copper`,
+`denise`, `cpu`, `paula`, `cia`, `post`, `yield`), plus deux sous-totaux : `blit` (compteur
+`blitter_ns()` du cœur, inclus dans `cpu`) et `vga_cb` (callback Denise → framebuffer, inclus dans
+`denise`, avec le nombre de lignes réellement écrites). Aucune retouche de `src/core/`.
+
+**Coût** : +2,1 ms/trame au repos (34,6 → 32,2 fps), alors que le calcul ajouté pèse ~0,1 ms →
+effet de disposition du binaire sur le cache flash/PSRAM (même signature que l'épisode `IRAM_ATTR`
+ci-dessous). OFF par défaut ; build par défaut vérifié identique (sections ELF) à celui d'avant.
+
+**Mesures (Workbench 1.3 embarqué, sans SD, 90 s, fenêtres de 50 trames)** :
+
+| Phase | ms/trame | denise | cpu (dont blit) | vga_cb (lignes écrites) | reste |
+|---|---|---|---|---|---|
+| Écran Kickstart (boot) | 57-65 | 28,6 | 27-36 (0) | 5,4 (312/312) | ~1,4 |
+| Chargement disque WB | 52-61 | 27,8 | 22-31 (0,5-1,6 ; pic 3,7) | 1,0 (117/312) | ~2 |
+| Bureau au repos | 33-37 | 27,4 | 3-7 (0) | 1,0 (117/312) | ~2 |
+
+Lecture :
+- **Denise est le premier goulot : ~27,5 ms/trame quasi constant** (75-85 % au repos, ~50 % sinon),
+  soit ~85 µs (~20 000 cycles) par ligne Amiga.
+- **Le skip de lignes inchangées ne fait presque rien gagner** : il n'évite que la conversion VGA
+  (`vga_cb` passe de 5,4 à 1,0 ms) ; les ~26,5 ms restantes sont dépensées dans
+  `denise_render_line` **avant** la décision de skip, même pour les lignes sautées.
+- **Le CPU 68000 (Musashi) est le second** : 3-7 ms au repos, 22-36 ms pendant le boot et les
+  accès disque. Le blitter est marginal (≤ 1,6 ms en moyenne, pic 3,7 ms).
+- Copper, Paula, CIA, entrées, `vTaskDelay` : 1,4 à 2,1 ms au total, rien à gagner là.
+- Plafond théorique si Denise devenait gratuit : ~6-10 ms/trame au repos → 50 fps atteignables.
+
+Hypothèse à vérifier (non mesurée) pour les ~85 µs/ligne : `denise_render_line` (flash) et ses
+données (bitplanes et snapshots en PSRAM) sont expulsés du cache par Musashi entre deux lignes, et
+rechargés à chaque ligne ; s'y ajoutent le remplissage de 640 pixels de fond et la copie/comparaison
+des bitplanes en PSRAM. Prochaine étape : sous-profiler `denise_render_line`.
+
 ## Variante Kickstart seul (`ttgo-vga32-kickonly`)
 
 `VGA32_EMBED_ADF` (`platform_esp32.h`, défaut 1) : à 0, `main.cpp` n'inclut pas `wb_adf.h` et n'a

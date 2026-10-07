@@ -37,6 +37,9 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
   libre ~154 Ko (mesuré 2026-10-07 avec audio/clavier/UART ; les ~170 Ko de PORTING datent de la Phase 1). Après toute modif du chemin vidéo/CPU : re-mesurer et comparer à ces chiffres.
 - Régression ≥ 5 % ou trame qui explose → chercher d'abord un conflit de cache flash/PSRAM :
   tout code appelé par ligne (`denise_cb`, `osd_draw_row`, callbacks vidéo) doit être `IRAM_ATTR`.
+- Où part le temps : env `ttgo-vga32-prof` (ligne `[PROF]`, voir `docs/PORTING.md`). Il coûte
+  ~2 ms/trame (effet cache) : répartition fiable, fps absolus pessimistes ; mesurer les fps sur
+  l'env normal.
 - Plancher absolu : ≥ 10 fps soutenu ET heap interne ≥ 40 Ko ET VGA stable. Sous ce plancher :
   appliquer un repli de `docs/PORTING.md` (lores forcé, frameskip…), ne pas forcer.
 - Ne JAMAIS retirer `-mfix-esp32-psram-cache-issue` sans avoir mesuré la révision silicium
