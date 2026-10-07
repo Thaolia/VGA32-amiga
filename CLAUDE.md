@@ -62,6 +62,9 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
   voir `CLAUDE.local.md` (WSL2 : esptool Windows, cf. README).
 - Toolchain figée : `espressif32@6.10.0` → arduino-esp32 **2.0.17** (FabGL + I2S legacy). Ne
   jamais utiliser d'API arduino-esp32 3.x ni monter la plateforme sans le demander.
+- Stratégie PSRAM rev1 : `memw` (défaut) mesurée la plus rapide ; `dupldst` (+12 %) et `nops` (+7 %)
+  sont plus lents. Tout changement touchant la PSRAM se valide avec l'env `ttgo-vga32-stress`
+  (stress cœur 1 + CRC de la RAM Amiga, à comparer à un run de référence).
 - Options de vitesse mesurées, à garder : flash QIO (`board_build.flash_mode = qio`, vérifier
   `[FLASH]` ≈ 23 Mo/s au boot), `-O2` (`build_unflags = -Os`). Tables de saut : pas de gain, ne pas
   réactiver. L'API himem d'ESP-IDF fait planter au boot avec ce framework : ne pas la lier.

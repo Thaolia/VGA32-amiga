@@ -98,6 +98,13 @@
 #define VGA32_FASTRAM2_KB  256
 #endif
 
+/* ---- Validation d'une stratégie de contournement PSRAM (src/hal/psram_stress) ----
+ * 1 : tâche de stress PSRAM sur le cœur 1 + CRC de la RAM Amiga toutes les 500 trames.
+ * Env pio ttgo-vga32-stress uniquement. */
+#ifndef VGA32_PSRAM_STRESS
+#define VGA32_PSRAM_STRESS 0
+#endif
+
 /* ---- Limiteur de vitesse ----
  * Un A500 PAL affiche 50 trames/s : plus vite, le temps Amiga s'accélère (horloge, souris,
  * audio produit plus vite que le DAC ne le consomme). 1 = jamais plus de 50 trames/s. */

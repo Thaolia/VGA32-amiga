@@ -140,10 +140,22 @@ empreinte figée de l'implémentation d'origine et un test de mutation détecté
 Le diagnostic `color_diag_max_idx` (jamais affiché : `video_color_diag_dump()` n'est appelée nulle
 part) garde sa valeur exacte, calculée en registre et écrite une fois par ligne.
 
-**Piste suivante identifiée** : `-mfix-esp32-psram-cache-strategy=` (GCC 8.4) accepte `memw` (défaut),
-`dupldst`, `nops`. Le `memw` après chaque écriture domine tous les profils ; une autre stratégie pour
-notre code (le SDK précompilé garde `memw`) pourrait coûter moins cher, mais une stratégie inadaptée
-corromprait la PSRAM en silence sur cette puce rev1 : à valider par un test d'endurance avant adoption.
+**Stratégie de contournement PSRAM rev1 : `memw` reste la meilleure (mesuré).**
+`-mfix-esp32-psram-cache-strategy=` (GCC 8.4) accepte `memw` (défaut), `dupldst`, `nops`, pour notre
+code (le SDK précompilé garde `memw`). Validation : env `ttgo-vga32-stress` (`src/hal/psram_stress.*`)
+= tâche sur le cœur 1 qui martèle 64 Ko de PSRAM (écritures 8/16/32 bits, lecture-modification-
+écriture relue) pendant l'émulation, + CRC32 de la chip RAM et de la Fast RAM toutes les 500 trames.
+L'émulation sans entrée est déterministe : CRC identiques entre deux boots `memw`, donc comparables
+entre builds.
+
+| Stratégie | `memw` dans `denise_render_line` | Lemmings ms/trame | Endurance (stress + CRC) |
+|---|---|---|---|
+| `memw` (défaut) | 42 (897 instr.) | **40,4** | 0 erreur / 6 400 passes, CRC de référence |
+| `dupldst` | 10 (1 017 instr., accès dupliqués) | 45,3 (+12 %) | 0 erreur / 5 600 passes, CRC identiques |
+| `nops` | 8 + 83 `nop` | 43,1 (+7 %) | non fait (pas retenue) |
+
+Les accès dupliqués ou les `nop` coûtent plus que les `memw` économisés. Ne pas réessayer sans
+changement d'architecture du code chaud.
 
 ## Jeux : Paula par événements, QIO, -O2, Fast RAM 1,25 Mo (2026-10-07)
 

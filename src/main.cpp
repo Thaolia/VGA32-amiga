@@ -31,6 +31,7 @@
 #include "disk_switch.h"
 #include "serial_kbd.h"
 #include "zorro.h"
+#include "psram_stress.h"
 
 #include "a500.h"            /* coeur emulateur (C++) */
 /* inconditionnel : le LDF PlatformIO (deep+) ne voit pas VGA32_EMBED_ADF et retirerait
@@ -330,6 +331,12 @@ static void emu_task(void *arg)
                           cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] : 0,
                           cs <= ESP_SPIRAM_SIZE_64MBITS ? chip_mbit[cs] / 8 : 0);
         }
+#if VGA32_PSRAM_STRESS
+        if ((cur_frame % 500) == 0)
+            Serial.printf("[CRC] trame %d : RAM Amiga %08X | stress PSRAM %u passes, %u erreurs\n",
+                          cur_frame, (unsigned)psram_stress_crc(),
+                          (unsigned)psram_stress_passes(), (unsigned)psram_stress_errors());
+#endif
         if (cur_frame == 200 || cur_frame == 1000) {
             /* cartes Zorro : base attribuee par le Kickstart, et part de la Fast RAM deja
              * touchee par le systeme (pages de 4 Ko non nulles) */
@@ -414,6 +421,9 @@ void setup(void)
 
     /* bouton IO36 + tache de lecture SD : APRES video_vga_init, qui fixe busiestCore */
     disk_switch_init(boot_idx);
+#if VGA32_PSRAM_STRESS
+    psram_stress_start();
+#endif
 
     /* 4. entree PS/2 (souris + clavier). L'audio demarre dans emu_task APRES
      *    paula_reset (le ring Paula doit exister avant la 1ere consommation). */
