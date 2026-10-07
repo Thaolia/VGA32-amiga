@@ -128,6 +128,7 @@ static const char *const PROF_NAME[P_N] = {
     "trame", "copper", "denise", "cpu", "paula", "cia", "post", "yield" };
 #define PROF_WINDOW 50
 static uint64_t s_prof[P_N];
+static uint64_t s_last_cpu_cyc;              /* cycles cpu de la fenetre, pour [M68K] */
 static uint32_t s_prof_t;
 #define PROF_MARK(slot) do { uint32_t _n = prof_ccount(); s_prof[slot] += _n - s_prof_t; \
                              s_prof_t = _n; } while (0)
@@ -158,6 +159,7 @@ static void prof_report(void)
     Serial.printf(" | dont blit %.2f (%u/tr) | dont vga_cb %.2f, %u lignes/tr\n",
                   blit_ms, (unsigned)(blits / PROF_WINDOW),
                   cb_cyc / mhz / 1000.0 / PROF_WINDOW, (unsigned)(cb_lines / PROF_WINDOW));
+    s_last_cpu_cyc = s_prof[P_CPU];
     for (int i = 0; i < P_N; i++) s_prof[i] = 0;
 
     /* detail de denise (instrumente dans core/video.cpp) : ms/trame par sous-etape,
@@ -177,6 +179,22 @@ static void prof_report(void)
         denise_prof_lines[i] = 0;
     }
     Serial.println();
+
+    /* 68000 : instructions et accès mémoire par trame ; « reste » = cpu - accès mémoire, soit
+     * décodage (tables de saut/cycles en PSRAM) + exécution des handlers */
+    static const char *const MP_NAME[MP_N] = { "r8", "r16", "r32", "w8", "w16", "w32" };
+    uint64_t mem_cyc = 0;
+    Serial.printf("[M68K] %u instr/tr (%.0f ns/instr) |", (unsigned)(vga32_m68k_instr / PROF_WINDOW),
+                  vga32_m68k_instr ? s_last_cpu_cyc / mhz * 1000.0 / vga32_m68k_instr : 0.0);
+    for (int i = 0; i < MP_N; i++) {
+        Serial.printf(" %s %u/tr %.2f ms", MP_NAME[i], (unsigned)(m68k_mem_prof_n[i] / PROF_WINDOW),
+                      m68k_mem_prof_cyc[i] / mhz / 1000.0 / PROF_WINDOW);
+        mem_cyc += m68k_mem_prof_cyc[i];
+        m68k_mem_prof_n[i] = m68k_mem_prof_cyc[i] = 0;
+    }
+    Serial.printf(" | memoire %.2f ms, reste %.2f ms\n", mem_cyc / mhz / 1000.0 / PROF_WINDOW,
+                  (s_last_cpu_cyc > mem_cyc ? s_last_cpu_cyc - mem_cyc : 0) / mhz / 1000.0 / PROF_WINDOW);
+    vga32_m68k_instr = 0;
 }
 #else
 #define PROF_MARK(slot) do {} while (0)

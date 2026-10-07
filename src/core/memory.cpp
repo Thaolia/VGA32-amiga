@@ -62,6 +62,21 @@ int mem_load_rom(const char *path)
 }
 #endif
 
+/* Portage VGA32 : table des pages de 64 Ko lisibles directement (chip RAM ou ROM en overlay,
+ * slow RAM, ROM et son miroir) : une lecture 68000 y trouve sa mémoire en une consultation au
+ * lieu d'une chaîne de comparaisons. À reconstruire à chaque changement d'overlay. La Fast RAM
+ * (zorro_page), les CIA et les registres custom restent traités après, comme avant. */
+static const uint8_t *rd_page[256];
+void mem_map_update(void)
+{
+    for (int i = 0; i < 256; i++) rd_page[i] = nullptr;
+    for (int p = 0; p < (int)(CHIP_SIZE >> 16); p++)
+        rd_page[p] = ovl ? &kick_rom[(p << 16) & (ROM_SIZE - 1)] : &chip_ram[p << 16];
+    if (slow_ram)
+        for (int p = 0; p < (int)(SLOW_SIZE >> 16); p++) rd_page[(SLOW_BASE >> 16) + p] = &slow_ram[p << 16];
+    for (int p = 0xF8; p < 0x100; p++) rd_page[p] = &kick_rom[(p << 16) & (ROM_SIZE - 1)];
+}
+
 void mem_reset(void)
 {
     /* Su Arduino chip_ram e' un puntatore PSRAM: sizeof(chip_ram) resetterebbe
@@ -70,6 +85,7 @@ void mem_reset(void)
     if (slow_ram) memset(slow_ram, 0, SLOW_SIZE);
     zorro_reset();     /* cartes d'extension non configurées : le Kickstart les reconfigure */
     ovl = 1;
+    mem_map_update();
 }
 
 /* log una-tantum per accessi a zone non mappate */
@@ -83,15 +99,11 @@ static void unmapped(const char *op, uint32_t a)
            m68k_get_reg(NULL, M68K_REG_PPC));
 }
 
-static inline uint8_t rom_b(uint32_t a) { return kick_rom[a & (ROM_SIZE - 1)]; }
-
 static uint8_t read8(uint32_t a)
 {
     a &= 0xFFFFFF;
-    if (a < CHIP_SIZE)  return ovl ? rom_b(a) : chip_ram[a];
-    if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) return slow_ram[a - SLOW_BASE];
+    { const uint8_t *r = rd_page[a >> 16]; if (r) return r[a & 0xFFFF]; }
     { const uint8_t *z = zorro_page[a >> 16]; if (z) return z[a & 0xFFFF]; }
-    if (a >= 0xF80000)  return rom_b(a);
     if ((a & 0xFFF000) == 0xBFE000 && (a & 1)) return cia_read(&cia_a, (a >> 8) & 0xF);
     if ((a & 0xFFF000) == 0xBFD000 && !(a & 1)) return cia_read(&cia_b, (a >> 8) & 0xF);
     if ((a & 0xFFF000) == 0xDFF000) {
@@ -122,24 +134,30 @@ static void write8(uint32_t a, uint8_t v)
     unmapped("W8", a);
 }
 
+/* Portage VGA32 : profiling des accès mémoire du 68000 (env ttgo-vga32-prof). Les accesseurs
+ * s'appellent alors *_impl et une enveloppe compte appels et cycles ; hors profiling, MEMFN(x)
+ * vaut x et le code est inchangé. */
+#if defined(ARDUINO) && defined(VGA32_PROF) && VGA32_PROF
+#define MEM_PROF 1
+#define MEMFN(name) name##_impl
+#else
+#define MEM_PROF 0
+#define MEMFN(name) name
+#endif
+#if MEM_PROF
+uint32_t m68k_mem_prof_n[MP_N], m68k_mem_prof_cyc[MP_N];
+#endif
+
 extern "C" {
 
-unsigned int m68k_read_memory_8(unsigned int a) { return read8(a); }
+unsigned int MEMFN(m68k_read_memory_8)(unsigned int a) { return read8(a); }
 
-unsigned int m68k_read_memory_16(unsigned int a)
+unsigned int MEMFN(m68k_read_memory_16)(unsigned int a)
 {
     a &= 0xFFFFFE;
-    if (a < CHIP_SIZE) {
-        const uint8_t *p = ovl ? &kick_rom[a & (ROM_SIZE - 1)] : &chip_ram[a];
-        return (unsigned)p[0] << 8 | p[1];
-    }
-    if (a >= 0xF80000) {
-        const uint8_t *p = &kick_rom[a & (ROM_SIZE - 1)];
-        return (unsigned)p[0] << 8 | p[1];
-    }
-    if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) {
-        const uint8_t *p = &slow_ram[a - SLOW_BASE];
-        return (unsigned)p[0] << 8 | p[1];
+    {   /* chip/ROM/slow : a pair, donc a+1 reste dans la même page de 64 Ko */
+        const uint8_t *r = rd_page[a >> 16];
+        if (r) { r += a & 0xFFFF; return (unsigned)r[0] << 8 | r[1]; }
     }
     {   /* Fast RAM : a pair, donc a+1 reste dans la même page de 64 Ko */
         const uint8_t *z = zorro_page[a >> 16];
@@ -149,14 +167,14 @@ unsigned int m68k_read_memory_16(unsigned int a)
     return (unsigned)read8(a) << 8 | read8(a + 1);
 }
 
-unsigned int m68k_read_memory_32(unsigned int a)
+unsigned int MEMFN(m68k_read_memory_32)(unsigned int a)
 {
-    return m68k_read_memory_16(a) << 16 | m68k_read_memory_16(a + 2);
+    return MEMFN(m68k_read_memory_16)(a) << 16 | MEMFN(m68k_read_memory_16)(a + 2);
 }
 
-void m68k_write_memory_8(unsigned int a, unsigned int v) { write8(a, (uint8_t)v); }
+void MEMFN(m68k_write_memory_8)(unsigned int a, unsigned int v) { write8(a, (uint8_t)v); }
 
-void m68k_write_memory_16(unsigned int a, unsigned int v)
+void MEMFN(m68k_write_memory_16)(unsigned int a, unsigned int v)
 {
     a &= 0xFFFFFE;
     if (a < CHIP_SIZE) {
@@ -172,11 +190,23 @@ void m68k_write_memory_16(unsigned int a, unsigned int v)
     write8(a, (uint8_t)(v >> 8)); write8(a + 1, (uint8_t)v);
 }
 
-void m68k_write_memory_32(unsigned int a, unsigned int v)
+void MEMFN(m68k_write_memory_32)(unsigned int a, unsigned int v)
 {
-    m68k_write_memory_16(a, v >> 16);
-    m68k_write_memory_16(a + 2, v & 0xFFFF);
+    MEMFN(m68k_write_memory_16)(a, v >> 16);
+    MEMFN(m68k_write_memory_16)(a + 2, v & 0xFFFF);
 }
+
+#if MEM_PROF
+static inline uint32_t mp_cc(void) { uint32_t c; __asm__ __volatile__("rsr %0, ccount" : "=a"(c)); return c; }
+#define MP_READ(kind, sz) unsigned int m68k_read_memory_##sz(unsigned int a) { \
+    uint32_t t = mp_cc(); unsigned int r = m68k_read_memory_##sz##_impl(a); \
+    m68k_mem_prof_cyc[kind] += mp_cc() - t; m68k_mem_prof_n[kind]++; return r; }
+#define MP_WRITE(kind, sz) void m68k_write_memory_##sz(unsigned int a, unsigned int v) { \
+    uint32_t t = mp_cc(); m68k_write_memory_##sz##_impl(a, v); \
+    m68k_mem_prof_cyc[kind] += mp_cc() - t; m68k_mem_prof_n[kind]++; }
+MP_READ(MP_R8, 8)   MP_READ(MP_R16, 16)   MP_READ(MP_R32, 32)
+MP_WRITE(MP_W8, 8)  MP_WRITE(MP_W16, 16)  MP_WRITE(MP_W32, 32)
+#endif
 
 /* letture per il disassembler (senza effetti collaterali sui CIA/custom) */
 unsigned int m68k_read_disassembler_16(unsigned int a)

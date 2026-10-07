@@ -84,6 +84,14 @@
 #define M68K_EMULATE_040            M68K_OPT_OFF
 #endif
 
+/* Portage VGA32 : erreurs de bus (m68k_pulse_bus_error). Activées, Musashi copie les 16 registres
+ * D/A avant CHAQUE instruction pour pouvoir les restaurer ; sur l'ESP32 rev1, chaque écriture est
+ * suivie d'un memw (~200 cycles par instruction mesurés au total). L'émulateur A500 ne déclenche
+ * jamais d'erreur de bus : désactivées, m68k_pulse_bus_error() est alors sans effet. */
+#ifndef M68K_EMULATE_BUS_ERROR
+#define M68K_EMULATE_BUS_ERROR      M68K_OPT_OFF
+#endif
+
 /* Portage VGA32 : nombre de lignes de la table de cycles (une par type de CPU, 64 Ko chacune,
  * en PSRAM). Avec le seul 68000 émulé, une ligne suffit : 256 Ko de PSRAM rendus. */
 #if M68K_EMULATE_010 == M68K_OPT_OFF && M68K_EMULATE_EC020 == M68K_OPT_OFF && \

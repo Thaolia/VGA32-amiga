@@ -95,6 +95,10 @@ enum { DP_SPRDMA, DP_BGFILL, DP_WIN, DP_FETCH, DP_SKIPCHK, DP_SNAP, DP_PAL, DP_P
 enum { DL_BORDER, DL_NOPLANES, DL_SKIPPED, DL_DRAWN, DL_N };
 extern uint32_t denise_prof_cyc[DP_N];
 extern uint32_t denise_prof_lines[DL_N];
+/* portage VGA32 : profiling des accès mémoire du 68000 (memory.cpp) et des instructions */
+enum { MP_R8, MP_R16, MP_R32, MP_W8, MP_W16, MP_W32, MP_N };
+extern uint32_t m68k_mem_prof_n[MP_N], m68k_mem_prof_cyc[MP_N];
+extern "C" uint32_t vga32_m68k_instr;
 #endif
 #else
 int  paula_write_wav(const char *path);   /* harnais PC (tests/pc) */
@@ -143,6 +147,8 @@ uint8_t drive_pra_bits(void);           /* bit 2-5 di CIA-A PRA   */
  * Amiga paires, bases de RAM alignées). may_alias : accès légal à un tableau d'octets. */
 typedef uint16_t __attribute__((may_alias)) amiga_u16_t;
 static inline void wr_be16(uint8_t *p, uint16_t v) { *(amiga_u16_t *)p = __builtin_bswap16(v); }
+
+void mem_map_update(void);   /* portage VGA32 : à appeler quand l'overlay ROM change */
 
 /* ---- log & trace ---- */
 extern FILE *tracef;

@@ -34,7 +34,10 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
 - Référence (2026-10-07) : bureau Workbench au repos **8,5 ms de calcul** par trame ; jeu
-  (Lemmings, démo) **40,4 ms** (24,7 fps) ; heap interne libre ~154 Ko.
+  (Lemmings, démo) **37,1 ms** (26,9 fps) ; heap interne libre ~154 Ko.
+- Changement du 68000 ou de la mémoire (memory.cpp, cia.cpp, Musashi) : valider par l'env
+  `ttgo-vga32-stress` (CRC de la RAM Amiga identiques à la référence aux mêmes trames), en plus des
+  sentinelles PC.
 - Optimisation d'un module du cœur (Paula, blitter, Denise…) : d'abord un test différentiel à
   empreinte figée sur l'implémentation d'origine (`make testpaula/testblitdiff/testdenise` en sont
   les modèles), vérifier qu'un mutant est détecté, puis seulement optimiser. Le limiteur plafonne à 50 trames/s :

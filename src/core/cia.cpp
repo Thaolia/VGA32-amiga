@@ -31,6 +31,7 @@ void cia_reset(void)
     cia_init(&cia_a, "CIA-A", 3);
     cia_init(&cia_b, "CIA-B", 13);
     ovl = 1;
+    mem_map_update();   /* portage VGA32 : table de pages des lectures (memory.cpp) */
 }
 
 static void icr_set(cia_t *c, uint8_t bit)
@@ -51,6 +52,7 @@ static void ovl_update(void)
     int new_ovl = port_in(cia_a.pra, cia_a.ddra) & 1;
     if (new_ovl != ovl) {
         ovl = new_ovl;
+        mem_map_update();   /* portage VGA32 : table de pages des lectures (memory.cpp) */
         logmsg("[OVL] overlay %s (PC=%06X)\n", ovl ? "ATTIVO" : "RIMOSSO",
                m68k_get_reg(NULL, M68K_REG_PPC));
     }

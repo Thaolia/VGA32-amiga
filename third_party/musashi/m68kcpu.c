@@ -96,6 +96,10 @@ uint    m68ki_aerr_fc;
 
 jmp_buf m68ki_bus_error_jmp_buf;
 
+#if defined(ARDUINO) && defined(VGA32_PROF) && VGA32_PROF
+uint32_t vga32_m68k_instr;                   /* portage VGA32 : instructions exécutées */
+#endif
+
 /* Used by shift & rotate instructions */
 const uint8 m68ki_shift_8_table[65] =
 {
@@ -1004,12 +1008,19 @@ int m68k_execute(int num_cycles)
 			/* Record previous program counter */
 			REG_PPC = REG_PC;
 
+#if M68K_EMULATE_BUS_ERROR
 			/* Record previous D/A register state (in case of bus error) */
 			for (i = 15; i >= 0; i--){
 				REG_DA_SAVE[i] = REG_DA[i];
 			}
+#else
+			(void)i;
+#endif
 
 			/* Read an instruction and call its handler */
+#if defined(ARDUINO) && defined(VGA32_PROF) && VGA32_PROF
+			vga32_m68k_instr++;          /* portage VGA32 : profiling (env ttgo-vga32-prof) */
+#endif
 			REG_IR = m68ki_read_imm_16();
 			m68ki_instruction_jump_table[REG_IR]();
 			USE_CYCLES(CYC_INSTRUCTION[REG_IR]);
@@ -1118,7 +1129,9 @@ void m68k_init(void)
 /* Trigger a Bus Error exception */
 void m68k_pulse_bus_error(void)
 {
+#if M68K_EMULATE_BUS_ERROR
 	m68ki_exception_bus_error();
+#endif
 }
 
 /* Pulse the RESET line on the CPU */

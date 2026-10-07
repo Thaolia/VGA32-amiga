@@ -7,6 +7,8 @@
 #ifndef PLATFORM_ESP32_H
 #define PLATFORM_ESP32_H
 
+#include <stdint.h>
+
 /* ---- Sortie VGA (FabGL) ----
  * Les broches sont câblées en dur sur la carte VGA32 et correspondent EXACTEMENT
  * aux valeurs par défaut de fabgl::VGAController::begin() sans argument :

@@ -116,6 +116,46 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## 68000 : profil, registres D/A, table de pages ; Denise sur le cœur 1 (2026-10-07)
+
+**Profil** (env prof, ligne `[M68K]` : compteur d'instructions dans `m68k_execute`, appels et cycles
+de chaque accesseur via des enveloppes `MEMFN` dans `memory.cpp`, firmware normal inchangé) sur
+Lemmings : ~11 000 instructions/trame, ~2,9 µs par instruction ; lectures 16 bits 23 660/trame
+(6,6 ms) ; écritures 16 bits 3 750/trame (9,6 ms, **dont le blitter**, lancé par l'écriture de
+BLTSIZE) ; « reste » (décodage + exécution hors mémoire) 14,4 ms, soit ~310 cycles par instruction.
+
+| Étape | Lemmings ms/trame | fps | Validation |
+|---|---|---|---|
+| Départ | 40,4 | 24,7 | — |
+| Plus de copie des 16 registres D/A avant chaque instruction (`M68K_EMULATE_BUS_ERROR` OFF) | 37,8 | 26,4 | CRC identiques |
+| (essai) cache d'opcodes en DRAM devant les tables de saut/cycles | 38,2 | — | aucun gain, retiré |
+| Table de pages des lectures (chip/ROM/slow, `mem_map_update()` à chaque changement d'overlay) | **37,1** | **26,9** | CRC identiques |
+
+- `REG_DA_SAVE` ne sert qu'à restaurer les registres lors d'une erreur de bus ; l'émulateur
+  n'appelle jamais `m68k_pulse_bus_error()` (sans effet dans cette configuration).
+- Le cache d'opcodes (2 048 entrées, 16 Ko) n'a rien gagné : les lectures des tables en PSRAM restent
+  dans le cache matériel.
+- Validation de chaque étape : env `ttgo-vga32-stress`, CRC de la RAM Amiga aux trames 500-3000
+  identiques à la référence (`memw`, avant ces changements).
+
+**Profil après ces étapes** : CPU 29,9 ms (mémoire 17,5 dont blitter 6,1 ; « reste » 12,5 ms, soit
+~270 cycles par instruction), Denise 7,7, Paula 2,2. Le « reste » s'explique par l'état du 68000
+(registres, drapeaux N/Z/V/C/X séparés, PC, IR, cycles) stocké en mémoire : chaque mise à jour est une
+écriture suivie d'un `memw`. Musashi n'écrit jamais directement en PSRAM pendant l'émulation (les
+accès Amiga passent par `memory.cpp` ; seules les tables sont écrites, une fois, à l'init) : le compiler
+sans `-mfix-esp32-psram-cache-issue` (`unflags` dans `third_party/musashi/library.json`) supprimerait
+ces barrières. **Piste la plus prometteuse, non faite** : à valider par stress + CRC (risque de
+corruption silencieuse sur puce rev1 si une écriture PSRAM échappait à l'analyse).
+
+**Rendu Denise sur le cœur 1 (étude, non fait)** : déplaçable = conversion des pixels (1,85 ms),
+sprites, envoi VGA (2,38 ms) ; reste sur le cœur 0 = lecture des bitplanes, décision de saut,
+snapshot, palette (~3,3 ms), plus la copie de chaque ligne dessinée dans une file (~700 o, ~0,7 ms).
+Gain net estimé ~3,5 ms (37 → ~33,5 ms). Contraintes : TOUS les envois de lignes (bordure, 0 plan,
+lignes dessinées) et les commandes d'OSD doivent passer par la même file, sinon une ligne plus
+ancienne peut en écraser une plus récente ; `g_row_onscreen` reste sûr (au pire une ligne redessinée
+en trop) ; file SPSC en DRAM (~22 Ko pour 32 lignes), le cœur 0 attend si elle est pleine ; sur PC,
+rendu synchrone (`make testdenise` reste valable).
+
 ## Denise par tables, blitter, écritures 16 bits (2026-10-07)
 
 Même protocole (firmware normal, temps de calcul moyen trames 800-2000) :
