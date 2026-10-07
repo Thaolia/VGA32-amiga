@@ -49,7 +49,7 @@ test/testrom.bin: test/mkrom.py
 	python3 test/mkrom.py $@
 
 clean:
-	rm -rf a500 obj tjoy tdisk tpaula test/testrom.bin
+	rm -rf a500 obj tjoy tdisk tpaula tblitdiff test_blit.bin tdenise test_denise.ppm test/testrom.bin
 
 .PHONY: test testvideo testblit testboot testmfm clean
 
@@ -99,6 +99,21 @@ testpaula:
 	g++ -O2 -I$(CORE) -o tpaula test/test_paula_c.cpp $(CORE)/paula.cpp
 	./tpaula test_paula.wav
 	@test "$$(md5sum test_paula.wav | cut -d' ' -f1)" = "$(PAULA_REF_MD5)" && echo "OK  paula : WAV identique a la reference" || (echo "FAIL paula : WAV different de la reference"; exit 1)
+
+# Blitter : 3000 blits aléatoires figés, chip RAM + registres comparés à l'empreinte de
+# l'implémentation d'origine (avant minterm sans branchement / accès 16 bits / fill par table).
+BLIT_REF_MD5 = 86299a0228d76f048bc7184db08209da
+testblitdiff:
+	g++ -O2 -I$(CORE) -I$(M68KDIR) -o tblitdiff test/test_blit_c.cpp $(CORE)/blitter.cpp
+	./tblitdiff test_blit.bin > /dev/null
+	@test "$$(md5sum test_blit.bin | cut -d' ' -f1)" = "$(BLIT_REF_MD5)" && echo "OK  blitter : resultat identique a la reference" || (echo "FAIL blitter : resultat different de la reference"; exit 1)
+
+# Denise : 120 trames aléatoires (lores/hires, 0-6 plans, scroll), empreinte des framebuffers
+# comparée à celle de l'implémentation d'origine (calcul bit par bit, avant tables c2p).
+DENISE_REF = b6991587a7e58769
+testdenise:
+	g++ -O2 -I$(CORE) -o tdenise test/test_denise_c.cpp $(CORE)/video.cpp
+	@test "$$(./tdenise)" = "$(DENISE_REF)" && echo "OK  denise : framebuffers identiques a la reference" || (echo "FAIL denise : framebuffers differents de la reference"; exit 1)
 
 testaudio: a500
 	python3 test/mkrom_audio.py test/testrom_audio.bin

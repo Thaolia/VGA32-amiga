@@ -22,6 +22,9 @@ tests/pc/obj/
 tests/pc/tjoy
 tests/pc/tdisk
 tests/pc/tpaula
+tests/pc/tblitdiff
+tests/pc/test_blit.bin
+tests/pc/tdenise
 
 # ---- Config locale Claude Code ----
 .claude/

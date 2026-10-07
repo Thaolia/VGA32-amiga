@@ -33,8 +33,11 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 ## Garde-fous perf (valeurs de référence, voir `docs/PORTING.md`)
 
-- Référence (2026-10-07) : bureau Workbench au repos **12,3 ms de calcul** par trame ; jeu
-  (Lemmings, démo) **46,6 ms** (21,5 fps) ; heap interne libre ~154 Ko. Le limiteur plafonne à 50 trames/s :
+- Référence (2026-10-07) : bureau Workbench au repos **8,5 ms de calcul** par trame ; jeu
+  (Lemmings, démo) **40,4 ms** (24,7 fps) ; heap interne libre ~154 Ko.
+- Optimisation d'un module du cœur (Paula, blitter, Denise…) : d'abord un test différentiel à
+  empreinte figée sur l'implémentation d'origine (`make testpaula/testblitdiff/testdenise` en sont
+  les modèles), vérifier qu'un mutant est détecté, puis seulement optimiser. Le limiteur plafonne à 50 trames/s :
   mesurer la perf sur le temps de calcul du log `=== frame` (attente exclue), jamais sur les fps réels.
 - Le temps au repos varie de quelques ms selon la disposition du binaire et l'endroit où l'OS
   place ses données (cache partagé flash/PSRAM, mesuré 12,3 à 19,2 ms) : une variation de cet ordre
@@ -115,7 +118,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
    testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert ; modif sous `#ifdef ARDUINO`
-   → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula`.
+   → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula` ;
+   blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise`.
    `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.
 2. HAL pure modifiée (`serial_proto`, `disk_select`, `vga_pack`, `zorro`) → `make -C tests/hal test` au vert.

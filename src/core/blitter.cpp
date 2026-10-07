@@ -17,31 +17,65 @@ extern "C" {
 static long long blit_total_ns = 0;
 long long blitter_ns(void) { return blit_total_ns; }
 
-/* accesso word alla chip RAM (indirizzi word-aligned, mask 512KB) */
+/* accesso word alla chip RAM (indirizzi word-aligned, mask 512KB).
+ * Portage VGA32 : une lecture et une écriture 16 bits (au lieu de 2 octets ; chaque écriture
+ * coûte un memw sur la cible). Résultats identiques : make testblitdiff. */
 static inline uint16_t rd16(uint32_t a)
 {
-    a &= 0x7FFFE;
-    return (uint16_t)(chip_ram[a] << 8 | chip_ram[a + 1]);
+    return __builtin_bswap16(*(const amiga_u16_t *)&chip_ram[a & 0x7FFFE]);
 }
 static inline void wr16(uint32_t a, uint16_t v)
 {
-    a &= 0x7FFFE;
-    chip_ram[a] = (uint8_t)(v >> 8);
-    chip_ram[a + 1] = (uint8_t)v;
+    wr_be16(&chip_ram[a & 0x7FFFE], v);
 }
 
-static inline uint16_t minterm(uint8_t lf, uint16_t a, uint16_t b, uint16_t c)
+/* Portage VGA32 : minterm sans branchement. Les 8 bits de LF deviennent 8 masques (0 ou
+ * 0xFFFF) une fois par blit ; par mot, c choisit entre les termes « c = 1 » (bits 7,5,3,1) et
+ * « c = 0 » (bits 6,4,2,0) des quatre combinaisons de a et b. Même table de vérité que
+ * l'ancienne évaluation terme à terme (8 tests par mot). */
+typedef struct { uint16_t m[8]; } minterm_t;
+static inline minterm_t minterm_prep(uint8_t lf)
 {
-    uint16_t d = 0;
-    if (lf & 0x80) d |= (uint16_t)( a &  b &  c);
-    if (lf & 0x40) d |= (uint16_t)( a &  b & ~c);
-    if (lf & 0x20) d |= (uint16_t)( a & ~b &  c);
-    if (lf & 0x10) d |= (uint16_t)( a & ~b & ~c);
-    if (lf & 0x08) d |= (uint16_t)(~a &  b &  c);
-    if (lf & 0x04) d |= (uint16_t)(~a &  b & ~c);
-    if (lf & 0x02) d |= (uint16_t)(~a & ~b &  c);
-    if (lf & 0x01) d |= (uint16_t)(~a & ~b & ~c);
-    return d;
+    minterm_t t;
+    for (int i = 0; i < 8; i++) t.m[i] = (lf >> i) & 1 ? 0xFFFF : 0;
+    return t;
+}
+static inline uint16_t minterm(const minterm_t *t, uint16_t a, uint16_t b, uint16_t c)
+{
+    const uint16_t ab = a & b, anb = a & ~b, nab = ~a & b, nanb = ~(a | b);
+    const uint16_t hi = (ab & t->m[7]) | (anb & t->m[5]) | (nab & t->m[3]) | (nanb & t->m[1]);
+    const uint16_t lo = (ab & t->m[6]) | (anb & t->m[4]) | (nab & t->m[2]) | (nanb & t->m[0]);
+    return (uint16_t)((c & hi) | (~c & lo));
+}
+
+/* Portage VGA32 : remplissage (fill) par table, 8 bits à la fois au lieu de 16 itérations par
+ * mot. Entrée : mode (0 = inclusif IFE, 1 = exclusif EFE), état de remplissage, octet ; sortie :
+ * octet rempli | état final << 8. Règle bit à bit inchangée (du LSB vers le MSB). */
+static uint16_t fill_tab[2][2][256];
+static void fill_tab_init(void)
+{
+    static int done = 0;
+    if (done) return;
+    for (int mode = 0; mode < 2; mode++)
+        for (int fc0 = 0; fc0 < 2; fc0++)
+            for (int v = 0; v < 256; v++) {
+                int fc = fc0, out = 0;
+                for (int i = 0; i < 8; i++) {
+                    int bit = (v >> i) & 1;
+                    int ob = mode == 0 ? (bit | fc) : (fc & ~bit);
+                    out |= ob << i;
+                    fc ^= bit;
+                }
+                fill_tab[mode][fc0][v] = (uint16_t)(out | fc << 8);
+            }
+    done = 1;
+}
+static inline uint16_t fill_word(int mode, int *fc, uint16_t d)
+{
+    uint16_t lo = fill_tab[mode][*fc][d & 0xFF];
+    uint16_t hi = fill_tab[mode][lo >> 8][d >> 8];
+    *fc = hi >> 8;
+    return (uint16_t)((lo & 0xFF) | (hi & 0xFF) << 8);
 }
 
 static uint32_t pt(uint32_t off_h)   /* puntatore 20 bit da coppia H/L */
@@ -57,9 +91,11 @@ static void blit_area(uint16_t bltsize)
     int h = (bltsize >> 6) & 0x3FF; if (!h) h = 1024;
     int ash = con0 >> 12, bsh = con1 >> 12;
     int usea = con0 & 0x800, useb = con0 & 0x400, usec = con0 & 0x200, used = con0 & 0x100;
-    uint8_t  lf  = (uint8_t)con0;
+    const minterm_t mt = minterm_prep((uint8_t)con0);
     int desc = con1 & 0x002;
     int ife  = con1 & 0x008, efe = con1 & 0x010, fci = (con1 & 0x004) ? 1 : 0;
+    const int fill = ife || efe, fill_mode = ife ? 0 : 1;
+    if (fill) fill_tab_init();
     uint16_t fwm = custom_get(0x044), lwm = custom_get(0x046);
     uint32_t apt = pt(0x050), bpt = pt(0x04C), cpt = pt(0x048), dpt = pt(0x054);
     int16_t amod = (int16_t)custom_get(0x064), bmod = (int16_t)custom_get(0x062);
@@ -91,18 +127,10 @@ static void blit_area(uint16_t bltsize)
             }
             if (useb) bprev = braw;
             uint16_t chold = usec ? rd16(cpt) : cdat;
-            uint16_t dhold = minterm(lf, ahold, bhold, chold);
+            uint16_t dhold = minterm(&mt, ahold, bhold, chold);
 
-            if (ife || efe) {   /* fill (significativo in DESC): bit da LSB a MSB */
-                uint16_t out = 0;
-                for (int i = 0; i < 16; i++) {
-                    int bit = (dhold >> i) & 1;
-                    int ob  = ife ? (bit | fc) : (fc & ~bit);
-                    out |= (uint16_t)(ob << i);
-                    fc ^= bit;
-                }
-                dhold = out;
-            }
+            if (fill)           /* fill (significativo in DESC): bit da LSB a MSB */
+                dhold = fill_word(fill_mode, &fc, dhold);
 
             if (used) wr16(dpt, dhold);
             if (usea) apt += (uint32_t)(dir * 2);
@@ -136,7 +164,7 @@ static void blit_line(uint16_t bltsize)
     int len = (bltsize >> 6) & 0x3FF; if (!len) len = 1024;
     int x   = con0 >> 12;                 /* pixel di partenza nella word */
     int bsh = con1 >> 12;                 /* rotazione texture */
-    uint8_t lf = (uint8_t)con0;
+    const minterm_t mt = minterm_prep((uint8_t)con0);
     int sign = (con1 & 0x040) ? 1 : 0;
     int sing = con1 & 0x002, sud = con1 & 0x010, sul = con1 & 0x008, aul = con1 & 0x004;
     uint32_t cpt = pt(0x048);             /* dest = C = D */
@@ -155,7 +183,7 @@ static void blit_line(uint16_t bltsize)
             uint16_t bhold = (uint16_t)((bdat >> bsh) | (bdat << (16 - bsh)));
             if (bsh == 0) bhold = bdat;
             uint16_t chold = rd16(cpt);
-            wr16(cpt, minterm(lf, ahold, bhold, chold));
+            wr16(cpt, minterm(&mt, ahold, bhold, chold));
             dot_row = 1;
         }
         bdat = (uint16_t)((bdat << 1) | (bdat >> 15));       /* texture avanza per pixel */
@@ -190,11 +218,17 @@ int blit_irq_pending = 0;   /* completamento differito alla prossima scanline:
 
 void blitter_do(uint16_t bltsize)
 {
+    /* Portage VGA32 : chronométrage (blitter_ns) réservé au PC et au build de profiling :
+     * deux clock_gettime par blit coûtent sur la cible (176 blits/trame mesurés en jeu). */
+#if !defined(ARDUINO) || (defined(VGA32_PROF) && VGA32_PROF)
     struct timespec a, c;
     clock_gettime(CLOCK_MONOTONIC, &a);
+#endif
     if (custom_get(0x042) & 0x0001) blit_line(bltsize);
     else                            blit_area(bltsize);
+#if !defined(ARDUINO) || (defined(VGA32_PROF) && VGA32_PROF)
     clock_gettime(CLOCK_MONOTONIC, &c);
     blit_total_ns += (c.tv_sec-a.tv_sec)*1000000000LL + (c.tv_nsec-a.tv_nsec);
+#endif
     blit_irq_pending = 1;
 }

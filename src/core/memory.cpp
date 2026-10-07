@@ -21,7 +21,7 @@ uint8_t *chip_ram = nullptr;   // 512KB in PSRAM (allocata in setup)
 uint8_t *slow_ram = nullptr;   // 512KB slow RAM @ 0xC00000 (PSRAM)
 uint8_t *kick_rom = nullptr;   // 256KB in PSRAM (caricata in setup)
 #else
-uint8_t chip_ram[CHIP_SIZE];
+uint8_t chip_ram[CHIP_SIZE] __attribute__((aligned(4)));   /* wr_be16 : écritures 16 bits */
 static uint8_t slow_ram_pc[SLOW_SIZE];   /* harnais PC (tests/pc) */
 uint8_t *slow_ram = slow_ram_pc;
 uint8_t kick_rom[ROM_SIZE];
@@ -160,13 +160,14 @@ void m68k_write_memory_16(unsigned int a, unsigned int v)
 {
     a &= 0xFFFFFE;
     if (a < CHIP_SIZE) {
-        if (!ovl) { chip_ram[a] = (uint8_t)(v >> 8); chip_ram[a + 1] = (uint8_t)v; }
+        if (!ovl) wr_be16(&chip_ram[a], (uint16_t)v);
         return;
     }
     {
         uint8_t *z = zorro_page[a >> 16];
-        if (z) { z += a & 0xFFFF; z[0] = (uint8_t)(v >> 8); z[1] = (uint8_t)v; return; }
+        if (z) { wr_be16(z + (a & 0xFFFF), (uint16_t)v); return; }
     }
+    if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) { wr_be16(&slow_ram[a - SLOW_BASE], (uint16_t)v); return; }
     if ((a & 0xFFF000) == 0xDFF000) { custom_write(a & 0x1FE, (uint16_t)v); return; }
     write8(a, (uint8_t)(v >> 8)); write8(a + 1, (uint8_t)v);
 }

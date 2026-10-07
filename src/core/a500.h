@@ -137,6 +137,13 @@ void     input_mouse_delta(int dx, int dy);   /* portage VGA32 : souris PS/2 */
 #endif
 uint8_t drive_pra_bits(void);           /* bit 2-5 di CIA-A PRA   */
 
+/* ---- portage VGA32 : écriture d'un mot gros-boutiste (ordre Amiga) en une seule écriture ----
+ * Sur la cible, chaque écriture est suivie d'un memw (-mfix-esp32-psram-cache-issue) : une
+ * écriture 16 bits au lieu de 2 octets divise ce coût par deux. p doit être pair (adresses
+ * Amiga paires, bases de RAM alignées). may_alias : accès légal à un tableau d'octets. */
+typedef uint16_t __attribute__((may_alias)) amiga_u16_t;
+static inline void wr_be16(uint8_t *p, uint16_t v) { *(amiga_u16_t *)p = __builtin_bswap16(v); }
+
 /* ---- log & trace ---- */
 extern FILE *tracef;
 void logmsg(const char *fmt, ...);

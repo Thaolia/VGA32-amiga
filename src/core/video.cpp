@@ -51,13 +51,13 @@ static int      coplog = 0;       /* log delle prime istruzioni        */
 #ifdef ARDUINO
 bool g_row_onscreen[FB_H] = {false};  // riga confermata sul display dal dirty-check
 #endif
-#ifdef ARDUINO
-// niente framebuffer intero (400KB non stanno in DRAM): una riga alla volta.
-static uint16_t fb_line[FB_W] __attribute__((aligned(4)));
-/* Portage VGA32 : remplissage de fb_line par mots de 32 bits (2 pixels par memw, inséré après
+/* Portage VGA32 : écritures de pixels par mots de 32 bits (2 pixels par memw, inséré après
  * chaque écriture par -mfix-esp32-psram-cache-issue). may_alias : écriture légale d'un
  * tableau uint16_t via un pointeur 32 bits. */
 typedef uint32_t __attribute__((may_alias)) fb_word_t;
+#ifdef ARDUINO
+// niente framebuffer intero (400KB non stanno in DRAM): una riga alla volta.
+static uint16_t fb_line[FB_W] __attribute__((aligned(4)));
 static inline void fb_line_fill(uint16_t c)
 {
     fb_word_t *p = (fb_word_t *)fb_line;
@@ -72,8 +72,41 @@ static inline uint16_t amiga_to_565(uint16_t c) {
     return ((r & 0xF8) << 8) | ((g & 0xFC) << 3) | (b >> 3);
 }
 #else
-static uint16_t fb[FB_H][FB_W];   /* colore RGB 4:4:4 */
+static uint16_t fb[FB_H][FB_W] __attribute__((aligned(4)));   /* colore RGB 4:4:4 */
 #endif
+
+/* Portage VGA32 : conversion planaire -> chunky par tables, 8 pixels à la fois. c2p_hi[b]
+ * range les bits 7..4 de l'octet de plan b (pixels 0..3) et c2p_lo[b] les bits 3..0 (pixels
+ * 4..7), un pixel par octet (octet k = pixel k, petit-boutiste) ; décalé de p bits, le plan p
+ * pose son bit dans chaque octet. En DRAM (pas en flash : lus à chaque groupe de 8 pixels). */
+static uint32_t c2p_hi[256], c2p_lo[256];
+static void c2p_init(void)
+{
+    static int done = 0;
+    if (done) return;
+    for (int b = 0; b < 256; b++) {
+        uint32_t h = 0, l = 0;
+        for (int k = 0; k < 4; k++) {
+            h |= (uint32_t)((b >> (7 - k)) & 1) << (8 * k);
+            l |= (uint32_t)((b >> (3 - k)) & 1) << (8 * k);
+        }
+        c2p_hi[b] = h; c2p_lo[b] = l;
+    }
+    done = 1;
+}
+
+/* Décale un plan de sc bits vers la droite (scroll fin BPLCON1) : le bit du pixel x devient
+ * celui du pixel x - sc de la source, 0 avant le début (comme l'ancien « if (sx < 0) »). */
+static void plane_shift(uint8_t *dst, const uint8_t *src, int nbytes, int sc)
+{
+    const int q = sc >> 3, r = sc & 7;
+    for (int i = 0; i < nbytes; i++) {
+        const int k = i - q;
+        const uint8_t cur  = k >= 0 ? src[k] : 0;
+        const uint8_t prev = k >= 1 ? src[k - 1] : 0;
+        dst[i] = r ? (uint8_t)((cur >> r) | (prev << (8 - r))) : cur;
+    }
+}
 
 /*
  * Palette Amiga OCS/ECS:
@@ -439,19 +472,43 @@ void denise_render_line(void)
        Arduino: in lores calcolo 320 pixel UNA volta (niente raddoppio: denise_cb
        decima comunque). In hires i 640 pixel servono tutti. Meta' del lavoro. */
     int outpx = hires ? 640 : 320;
-    for (int x = 0; x < outpx; x++) {
-        int idx = 0;
-        for (int p = 0; p < nplanes; p++) {
-            int sc = (p & 1) ? scroll_pf2 : scroll_pf1;
-            int sx = x - sc;
-            if (sx < 0) continue;
-            idx |= ((line[p][sx >> 3] >> (7 - (sx & 7))) & 1) << p;
-        }
-#ifdef ARDUINO
-        if ((uint8_t)idx > color_diag_max_idx) color_diag_max_idx = (uint8_t)idx;
-#endif
-        row[x] = pal[idx & 63];
+    /* Portage VGA32 : même résultat que le calcul bit par bit d'origine (pixel x = bits des
+     * plans au rang x - scroll), mais par groupes de 8 pixels : plans décalés une fois par
+     * ligne, tables c2p, 2 pixels par écriture 32 bits ; le maximum d'index du diagnostic
+     * couleur est tenu en registre et écrit une fois par ligne. */
+    c2p_init();
+    uint8_t shifted[6][80];
+    const uint8_t *pl[6];
+    for (int p = 0; p < nplanes; p++) {
+        const int sc = (p & 1) ? scroll_pf2 : scroll_pf1;
+        if (sc) { plane_shift(shifted[p], line[p], bytes_per_row, sc); pl[p] = shifted[p]; }
+        else    pl[p] = line[p];
     }
+    uint8_t maxidx = 0;
+    fb_word_t *out = (fb_word_t *)row;
+    for (int i = 0; i < outpx / 8; i++) {
+        uint32_t h = 0, l = 0;
+        for (int p = 0; p < nplanes; p++) {
+            const uint8_t b = pl[p][i];
+            h |= c2p_hi[b] << p;
+            l |= c2p_lo[b] << p;
+        }
+        const uint32_t m = h | l;                 /* maximum exact seulement si nécessaire */
+        if (m) for (int k = 0; k < 4; k++) {
+            const uint8_t a = (uint8_t)(h >> (8 * k)), c = (uint8_t)(l >> (8 * k));
+            if (a > maxidx) maxidx = a;
+            if (c > maxidx) maxidx = c;
+        }
+        out[4 * i]     = pal[h & 0xFF]         | (uint32_t)pal[(h >> 8) & 0xFF] << 16;
+        out[4 * i + 1] = pal[(h >> 16) & 0xFF] | (uint32_t)pal[h >> 24] << 16;
+        out[4 * i + 2] = pal[l & 0xFF]         | (uint32_t)pal[(l >> 8) & 0xFF] << 16;
+        out[4 * i + 3] = pal[(l >> 16) & 0xFF] | (uint32_t)pal[l >> 24] << 16;
+    }
+#ifdef ARDUINO
+    if (maxidx > color_diag_max_idx) color_diag_max_idx = maxidx;
+#else
+    (void)maxidx;
+#endif
     DPROF(DP_PIXELS)
     sprite_overlay(row, !hires);              /* sprite sopra il playfield */
     DPROF(DP_SPRITES)

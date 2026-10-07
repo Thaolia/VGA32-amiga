@@ -116,6 +116,35 @@ fait passer la trame 150 du boot de 42 ms à **194 ms** (reproductible à la µs
 (flash et PSRAM partagent le cache) selon l'agencement du binaire. Garder le code vidéo
 chaud en IRAM.
 
+## Denise par tables, blitter, écritures 16 bits (2026-10-07)
+
+Même protocole (firmware normal, temps de calcul moyen trames 800-2000) :
+
+| Étape | Lemmings ms/trame | fps |
+|---|---|---|
+| Départ (après Paula/QIO/-O2) | 46,6 | 21,5 |
+| Écritures 68000 en une écriture 16 bits (`wr_be16`, `a500.h`) | 46,8 | — (pas de gain mesurable) |
+| Blitter : minterm sans branchement, accès 16 bits, fill par table, sans `clock_gettime` hors profiling | 45,9 | 21,8 |
+| **Denise : planaire → chunky par tables** (`c2p_hi/c2p_lo`, plans décalés une fois par ligne, 2 pixels par écriture 32 bits) | **40,4** | **24,7** |
+
+Bureau Workbench au repos (hires) : 12,3 → **8,5 ms**.
+
+Équivalence prouvée au bit près par trois tests différentiels (`tests/pc`), chacun avec une
+empreinte figée de l'implémentation d'origine et un test de mutation détecté :
+- `make testblitdiff` : 3 000 blits aléatoires (zone et ligne, tous minterms, décalages, masques,
+  modulos, ascendant/descendant, fill inclusif/exclusif) → chip RAM + registres réécrits identiques.
+- `make testdenise` : 120 trames aléatoires (lores/hires, 0-6 plans, scroll BPLCON1 par playfield,
+  palette, pointeurs, modulos) → empreinte FNV-64 des framebuffers identique.
+- Images complètes des ROMs de test vidéo/scroll/sprite/blit identiques octet pour octet.
+
+Le diagnostic `color_diag_max_idx` (jamais affiché : `video_color_diag_dump()` n'est appelée nulle
+part) garde sa valeur exacte, calculée en registre et écrite une fois par ligne.
+
+**Piste suivante identifiée** : `-mfix-esp32-psram-cache-strategy=` (GCC 8.4) accepte `memw` (défaut),
+`dupldst`, `nops`. Le `memw` après chaque écriture domine tous les profils ; une autre stratégie pour
+notre code (le SDK précompilé garde `memw`) pourrait coûter moins cher, mais une stratégie inadaptée
+corromprait la PSRAM en silence sur cette puce rev1 : à valider par un test d'endurance avant adoption.
+
 ## Jeux : Paula par événements, QIO, -O2, Fast RAM 1,25 Mo (2026-10-07)
 
 Mesures sur Lemmings (démo jouable, ADF embarqué à la place du Workbench pour le profiling), temps
