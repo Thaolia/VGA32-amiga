@@ -55,8 +55,10 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   nom, `drive_eject` → tâche `adfload` (lecture SD sur le cœur VGA) → `drive_mount_ready`, pas avant
   `DS_EMPTY_MS` (3 s) de lecteur vide, pour que trackdisk voie l'éjection.
 - `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
-  (`cia_a_kbd_shift_in`) + IRQ série (INT2). Table VirtualKey→rawcode positionnelle dans
-  `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit désormais le registre + nouveau hook.
+  (`cia_a_kbd_shift_in`) + IRQ série (INT2) ; code suivant après le handshake de l'hôte (CRA bit 6
+  retombé, `cia_a_kbd_handshakes`), réémission au bout de 8 trames sans handshake. Table
+  VirtualKey→rawcode positionnelle dans `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit
+  désormais le registre + nouveau hook.
 - `serial_kbd.cpp` : **clavier + souris via port série USB (implémenté)** — octets de `Serial`
   démultiplexés par `serial_proto.cpp` : trames binaires de `tools/remote_input.py` (rawcode
   exact → `kbd_amiga`, souris → `input_mouse_delta`/`input_set_lmb/rmb`, bornage ±100/trame) ;

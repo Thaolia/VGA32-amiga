@@ -131,7 +131,7 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
    blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise` ; CIA → `make testcia`.
    `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.
-2. HAL pure modifiée (`serial_proto`, `disk_select`, `vga_pack`, `zorro`) → `make -C tests/hal test` au vert.
+2. HAL pure modifiée (`serial_proto`, `disk_select`, `vga_pack`, `zorro`, `kbd_amiga`) → `make -C tests/hal test` au vert.
 3. Cible → `pio run -e ttgo-vga32` compile sans warning nouveau.
 4. Changement observable → log série lu (fps/heap comparés à la référence) ou moniteur VGA.
    Si l'utilisateur doit observer lui-même, le dire explicitement : « non vérifié sur matériel ».

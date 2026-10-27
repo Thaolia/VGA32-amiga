@@ -466,7 +466,8 @@ le SDR (reg 0xC) était stubé (lecture = 0). Ajouts (retouches HAL, guardées `
 - `core/a500.h` : champ `sdr` dans `cia_t` + hook `cia_a_kbd_shift_in`.
 - `core/cia.cpp` : reg 0xC lit `c->sdr` ; `cia_a_kbd_shift_in(v)` dépose l'octet et lève l'IRQ série.
 - `src/hal/kbd_amiga.cpp` : FIFO de rawcodes ; encodage **`SDR = ~((rawcode<<1) | relâche)`** (vérifié
-  sur le driver Linux `amikbd.c`) ; cadencement handshake simplifié (un code par IRQ série acquittée).
+  sur le driver Linux `amikbd.c`) ; cadencement sur le handshake réel depuis le 2026-10-27 (voir
+  « Améliorations issues des analyses KickSlopStart »).
 - `src/hal/input_ps2.cpp` : table VirtualKey FabGL → rawcode Amiga **positionnelle** (HRM / amikbd.c ;
   min./maj. et chiffre/symbole → même touche physique, l'Amiga applique sa keymap via Shift).
 

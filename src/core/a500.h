@@ -44,6 +44,7 @@ typedef struct {
 } cia_t;
 
 extern cia_t cia_a, cia_b;
+extern uint32_t cia_a_kbd_handshakes; /* fins d'impulsion CRA bit 6 sur CIA-A (portage VGA32) */
 
 void    cia_reset(void);
 uint8_t cia_read (cia_t *c, int reg);

@@ -14,6 +14,7 @@ extern "C" {
 }
 
 cia_t cia_a, cia_b;
+uint32_t cia_a_kbd_handshakes;   /* portage VGA32 : handshakes clavier vus sur CIA-A */
 
 static void cia_init(cia_t *c, const char *name, int irqbit)
 {
@@ -169,7 +170,10 @@ void cia_write(cia_t *c, int reg, uint8_t v)
                   intreq_set(c->irq_intreq_bit);
               }
               break;
-    case 0xE: c->cra = v & 0xEF; if (v & 0x10) c->ta = c->ta_latch; break; /* force load */
+    case 0xE: /* Portage VGA32 : fin de l'impulsion de handshake clavier (SP en sortie puis
+                 retour en entrée) = acquittement vu par le MPU clavier (kbd_amiga.cpp) */
+              if (c == &cia_a && (c->cra & 0x40) && !(v & 0x40)) cia_a_kbd_handshakes++;
+              c->cra = v & 0xEF; if (v & 0x10) c->ta = c->ta_latch; break; /* force load */
     case 0xF: c->crb = v & 0xEF; if (v & 0x10) c->tb = c->tb_latch; break;
     }
 }

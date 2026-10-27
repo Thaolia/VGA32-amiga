@@ -76,6 +76,16 @@ int main(void)
     CHECK(intreq & 0x0008);
     CHECK((cia_read(&cia_a, 0xD) & 0x81) == 0x81);
 
+    /* handshake clavier : CRA bit 6 mis puis remis à 0 sur CIA-A = un acquittement ;
+       sur CIA-B, ou sans retombée, rien */
+    const uint32_t hs = cia_a_kbd_handshakes;
+    cia_write(&cia_a, 0xE, 0x40);
+    CHECK(cia_a_kbd_handshakes == hs);
+    cia_write(&cia_a, 0xE, 0x00);
+    CHECK(cia_a_kbd_handshakes == hs + 1);
+    cia_write(&cia_b, 0xE, 0x40); cia_write(&cia_b, 0xE, 0x00);
+    CHECK(cia_a_kbd_handshakes == hs + 1);
+
     printf("cia : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;
 }
