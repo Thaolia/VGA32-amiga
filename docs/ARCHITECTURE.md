@@ -84,7 +84,8 @@ cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kicksta
 1. `emu_task` : `input_ps2_poll` → `input_frame` → `copper_vblank` → `sprite_vblank`.
 2. Pour chaque ligne (0..311) : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
    (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne) → `m68k_execute(455)` →
-   `paula_step` (colorclock) → `cia_tick` → `cia_tod_hsync`.
+   `paula_step` (colorclock) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick` (rotation,
+   index /FLG) → `cia_tod_hsync`.
 3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` →
    `disk_switch_poll` → `video_vga_osd_tick` → log `=== frame` (`VGA32_DEBUG`, temps de calcul,
    attente exclue) → `frame_end_wait` : avec `VGA32_FPS_LIMIT` (défaut 1), attente de l'échéance

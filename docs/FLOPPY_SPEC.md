@@ -53,6 +53,7 @@ sync absent.
   secteur 0) [WU]. Effet : front sur CIA-B /FLG, ICR bit 4 de CIA-B, interruption niveau 6 (INTREQ
   bit 13, EXTER) si démasquée [HW]. Émise seulement par un lecteur sélectionné dont le moteur tourne
   [HW]. Front instantané suffisant (/FLG est sur front) ; anti-rebond de 2 lignes chez WinUAE [WU].
+  **Fait** (2026-10-27) : au mot 0 de notre révolution (`disk_line_tick`).
   Existe aussi pendant une écriture.
 
 ## B. DMA de lecture

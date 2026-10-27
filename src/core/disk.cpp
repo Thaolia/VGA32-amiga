@@ -28,17 +28,29 @@ int disk_irq_pending = 0;
 static uint8_t rev[REV_BYTES];        /* una rivoluzione MFM della traccia */
 static int rev_track = -1;            /* traccia attualmente codificata    */
 
-/* Portage VGA32 : rotation continue du disque (docs/FLOPPY_SPEC.md §A1-A3). Cellule MFM de
- * 7 CCK, ligne PAL de 227,5 CCK : 32,5 bits = 65/32 mots par ligne. Le temps émulé est
- * cur_frame * 312 + vpos lignes ; la rotation ne s'arrête pas avec le moteur (simplification
- * sans effet observable : la position de départ d'une lecture reste quelconque). */
+/* Portage VGA32 : rotation continue du disque (docs/FLOPPY_SPEC.md §A1-A4). Cellule MFM de
+ * 7 CCK, ligne PAL de 227,5 CCK : 32,5 bits = 65/32 mots par ligne, cumulés par
+ * disk_line_tick() ; la rotation ne s'arrête pas avec le moteur (simplification sans effet
+ * observable : la position de départ d'une lecture reste quelconque). L'index passe au mot 0
+ * (fin du gap, juste avant le secteur 0) : impulsion sur CIA-B /FLG si le lecteur sélectionné
+ * tourne avec un disque. */
 #define REV_WORDS (REV_BYTES / 2)
 static_assert(REV_BYTES % 2 == 0, "revolution MFM non alignee sur les mots");
-static uint32_t head_word(void)
+static uint32_t s_rot32;              /* position sous la tête, en 1/32 de mot */
+static uint32_t head_word(void) { return s_rot32 / 32u; }
+
+void disk_line_tick(void)
 {
-    const uint64_t lines = (uint64_t)(uint32_t)cur_frame * 312u + (uint32_t)vpos;
-    return (uint32_t)((lines * 65u / 32u) % REV_WORDS);
+    s_rot32 += 65u;
+    if (s_rot32 >= REV_WORDS * 32u) {
+        s_rot32 -= REV_WORDS * 32u;
+        if (drive_selected() && drive_motor_on() && drive_adf()) cia_b_index_pulse();
+    }
 }
+
+#ifndef ARDUINO
+void disk_rotation_reset(void) { s_rot32 = 0; }
+#endif
 static inline uint16_t rev_word(uint32_t w) { return (uint16_t)(rev[2 * w] << 8 | rev[2 * w + 1]); }
 
 /* ---- encoder MFM a livello di bit ---- */

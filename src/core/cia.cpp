@@ -5,6 +5,7 @@
  *   - TOD contatore 24 bit con latch di lettura (per KS1.3 basta che avanzi:
  *     CIA-A TOD è agganciato al tick 50Hz, CIA-B TOD all'HSYNC)
  * Fuori perimetro: SDR/tastiera, FLAG, linee handshake.
+ * [Portage VGA32 : FLAG de CIA-B (index), SDR clavier et handshake ajoutés]
  */
 #include "a500.h"
 #include <cstdio>
@@ -215,6 +216,9 @@ void cia_tick_cpu(int cpu_cycles)
     cia_tick(acc / 10);
     acc %= 10;
 }
+
+/* Portage VGA32 : front sur /FLG de CIA-B = impulsion d'index du lecteur (ICR bit 4) */
+void cia_b_index_pulse(void) { icr_set(&cia_b, 0x10); }
 
 /* Portage VGA32 : /INT2 et /INT6 des CIA sont des niveaux. Effacer PORTS/EXTER dans INTREQ
  * alors que l'ICR n'a pas été lu (IR encore à 1) les relève aussitôt : exec n'acquitte qu'après

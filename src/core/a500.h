@@ -51,6 +51,7 @@ uint8_t cia_read (cia_t *c, int reg);
 void    cia_write(cia_t *c, int reg, uint8_t v);
 void    cia_tick (int eclocks);      /* E-clock = CPU/10 */
 void    cia_tick_cpu(int cpu_cycles); /* idem en cycles CPU, reste reporté (portage VGA32) */
+void    cia_b_index_pulse(void);     /* /FLG de CIA-B = index du lecteur (portage VGA32) */
 void    cia_intreq_relevel(void);    /* INTREQ PORTS/EXTER = niveau IRQ des CIA (portage VGA32) */
 #ifdef ARDUINO
 void    cia_a_kbd_shift_in(uint8_t sdr_value);  /* clavier Amiga -> SP CIA-A (portage VGA32) */
@@ -121,11 +122,16 @@ void    drive_eject(void);
 int     drive_track(void);
 int     drive_side(void);
 int     drive_motor_on(void);
+int     drive_selected(void);
 const uint8_t *drive_adf(void);
 
 /* ---- disco: MFM + DMA (disk.cpp) ---- */
 void disk_dsklen_write(uint16_t v);
 extern int disk_irq_pending;         /* DSKBLK differito di una linea */
+void disk_line_tick(void);           /* rotation d'une ligne + impulsion d'index (portage VGA32) */
+#ifndef ARDUINO
+void disk_rotation_reset(void);      /* tests : rotation remise au mot 0 */
+#endif
 int  disk_mfmdump(int track, const char *path);
 
 /* ---- mouse porta 0 (input.cpp) ---- */

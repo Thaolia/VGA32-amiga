@@ -329,6 +329,7 @@ static void emu_task(void *arg)
             PROF_MARK(P_PAULA);
 
             cia_tick_cpu(CYC_LINE);
+            disk_line_tick();
             cia_tod_hsync();
             PROF_MARK(P_CIA);
         }

@@ -1,6 +1,6 @@
 /* test_disk_c.cpp — Tests de la lecture DMA disque (core/disk.cpp) avec des stubs à la place
  * du lecteur, de Agnus et de la chip RAM : position de rotation et WORDSYNC
- * (docs/FLOPPY_SPEC.md §A3, B5, B6, F1). */
+ * (docs/FLOPPY_SPEC.md §A3, A4, B5, B6, B12, F1). */
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -18,7 +18,10 @@ static int s_nodisk = 0;
 const uint8_t *drive_adf(void) { return s_nodisk ? nullptr : s_adf; }
 int drive_track(void) { return 0; }
 int drive_side(void) { return 0; }
-int drive_motor_on(void) { return 1; }
+static int s_motor = 1, s_sel = 1, s_index = 0;
+int drive_motor_on(void) { return s_motor; }
+int drive_selected(void) { return s_sel; }
+void cia_b_index_pulse(void) { s_index++; }
 void logmsg(const char *, ...) {}
 
 static int fails = 0;
@@ -28,11 +31,18 @@ static int fails = 0;
 static uint16_t w16(uint32_t a) { return (uint16_t)(chip_ram[a] << 8 | chip_ram[a + 1]); }
 static uint32_t l32(uint32_t a) { return (uint32_t)w16(a) << 16 | w16(a + 2); }
 
+/* avance la rotation jusqu'au temps (frame, ligne) depuis le mot 0 (trames de 313 lignes) */
+static void seek_time(int frame, int line)
+{
+    disk_rotation_reset();
+    for (int i = 0; i < frame * 313 + line; i++) disk_line_tick();
+}
+
 /* lit len mots à DSKPT = 0 au temps (frame, ligne) ; rend 1 si DSKBLK est levé */
 static int read_at(int frame, int line, uint16_t len)
 {
     memset(chip_ram, 0, 0x10000);
-    cur_frame = frame; vpos = line;
+    seek_time(frame, line);
     disk_irq_pending = 0;
     disk_dsklen_write(0x8000 | len);
     disk_dsklen_write(0x8000 | len);
@@ -85,7 +95,7 @@ int main(void)
     s_nodisk = 1;
     adkcon = 0;
     memset(chip_ram, 0xEE, 0x10000);
-    cur_frame = 0; vpos = 0; disk_irq_pending = 0;
+    seek_time(0, 0); disk_irq_pending = 0;
     disk_dsklen_write(0x8000 | 100); disk_dsklen_write(0x8000 | 100);
     CHECK(disk_irq_pending == 1);
     CHECK(w16(0) == 0 && w16(198) == 0 && w16(200) == 0xEEEE);
@@ -93,6 +103,21 @@ int main(void)
     s_regs[0x07E >> 1] = 0x4489;
     CHECK(read_at(0, 0, 600) == 0);
     s_nodisk = 0;
+
+    /* index (§A4) : une impulsion par révolution de 6 334 mots (3 118,2 lignes à 65/32 mots par
+       ligne), seulement lecteur sélectionné, moteur en marche et disque présent */
+    seek_time(0, 0); s_index = 0;
+    for (int i = 0; i < 3118; i++) disk_line_tick();
+    CHECK(s_index == 0);
+    disk_line_tick();
+    CHECK(s_index == 1);
+    for (int i = 0; i < 10 * 3119; i++) disk_line_tick();
+    CHECK(s_index == 11);
+    s_index = 0;
+    s_nodisk = 1; for (int i = 0; i < 3200; i++) disk_line_tick(); s_nodisk = 0;
+    s_motor = 0;  for (int i = 0; i < 3200; i++) disk_line_tick(); s_motor = 1;
+    s_sel = 0;    for (int i = 0; i < 3200; i++) disk_line_tick(); s_sel = 1;
+    CHECK(s_index == 0);
 
     printf("disk : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;

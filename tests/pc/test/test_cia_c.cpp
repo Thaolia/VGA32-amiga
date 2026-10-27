@@ -93,6 +93,16 @@ int main(void)
     cia_write(&cia_b, 0xE, 0x40); cia_write(&cia_b, 0xE, 0x00);
     CHECK(cia_a_kbd_handshakes == hs + 1);
 
+    /* index du lecteur sur /FLG de CIA-B : ICR bit 4, EXTER seulement si autorisé */
+    cia_write(&cia_b, 0xD, 0x7F); cia_read(&cia_b, 0xD); intreq = 0;
+    cia_b_index_pulse();
+    CHECK(!(intreq & 0x2000));
+    CHECK(cia_read(&cia_b, 0xD) == 0x10);
+    cia_write(&cia_b, 0xD, 0x90);
+    cia_b_index_pulse();
+    CHECK(intreq & 0x2000);
+    CHECK(cia_read(&cia_b, 0xD) == 0x90);
+
     printf("cia : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;
 }
