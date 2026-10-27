@@ -163,6 +163,11 @@ void cia_write(cia_t *c, int reg, uint8_t v)
               if (c->cra & 0x40) icr_set(c, 0x08);
               break;
     case 0xD: if (v & 0x80) c->icr_mask |= (v & 0x1F); else c->icr_mask &= ~(v & 0x1F);
+              /* Portage VGA32 : autoriser une source déjà en attente lève l'IRQ (AbleICR) */
+              if ((v & 0x80) && (c->icr_data & c->icr_mask & 0x1F) && !(c->icr_data & 0x80)) {
+                  c->icr_data |= 0x80;
+                  intreq_set(c->irq_intreq_bit);
+              }
               break;
     case 0xE: c->cra = v & 0xEF; if (v & 0x10) c->ta = c->ta_latch; break; /* force load */
     case 0xF: c->crb = v & 0xEF; if (v & 0x10) c->tb = c->tb_latch; break;
@@ -195,6 +200,15 @@ void cia_tick(int eclocks)
 {
     timers_tick(&cia_a, eclocks);
     timers_tick(&cia_b, eclocks);
+}
+
+/* Portage VGA32 : /INT2 et /INT6 des CIA sont des niveaux. Effacer PORTS/EXTER dans INTREQ
+ * alors que l'ICR n'a pas été lu (IR encore à 1) les relève aussitôt : exec n'acquitte qu'après
+ * toute la chaîne de serveurs, un événement CIA arrivé entre-temps ne doit pas être perdu. */
+void cia_intreq_relevel(void)
+{
+    if (cia_a.icr_data & 0x80) intreq |= (uint16_t)(1 << cia_a.irq_intreq_bit);
+    if (cia_b.icr_data & 0x80) intreq |= (uint16_t)(1 << cia_b.irq_intreq_bit);
 }
 
 /* chiamate dal main loop: TOD CIA-B avanza a ogni HSYNC, TOD CIA-A a 50Hz */

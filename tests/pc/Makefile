@@ -53,7 +53,7 @@ test/testrom.bin: test/mkrom.py
 	python3 test/mkrom.py $@
 
 clean:
-	rm -rf a500 obj tjoy tdisk tpaula tblitdiff test_blit.bin tdenise test_denise.ppm test/testrom.bin
+	rm -rf a500 obj tjoy tdisk tcia tpaula tblitdiff test_blit.bin tdenise test_denise.ppm test/testrom.bin
 
 .PHONY: test testvideo testblit testboot testmfm clean
 
@@ -95,6 +95,10 @@ testjoy:
 testdisk:
 	g++ -I$(CORE) -o tdisk test/test_disk_c.cpp $(CORE)/disk.cpp
 	./tdisk
+
+testcia:
+	g++ -I$(CORE) -I$(M68KDIR) -o tcia test/test_cia_c.cpp $(CORE)/cia.cpp
+	./tcia
 
 # Paula : WAV d'un scénario aléatoire figé, comparé à l'empreinte de l'implémentation d'origine
 # (avance color clock par color clock, avant le pilotage par événements).

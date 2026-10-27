@@ -128,7 +128,7 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
    testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert ; modif sous `#ifdef ARDUINO`
    → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula` ;
-   blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise`.
+   blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise` ; CIA → `make testcia`.
    `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.
 2. HAL pure modifiée (`serial_proto`, `disk_select`, `vga_pack`, `zorro`) → `make -C tests/hal test` au vert.

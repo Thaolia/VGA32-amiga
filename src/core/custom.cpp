@@ -146,7 +146,7 @@ void custom_write(uint32_t off, uint16_t v)
         paula_set_dma(dmacon);   /* aggiorna master DMA + AUD0..AUD3 */
         return;
     case 0x09A: intena = setclr(intena, v); irq_update(); return;
-    case 0x09C: intreq = setclr(intreq, v); irq_update(); return;
+    case 0x09C: intreq = setclr(intreq, v); cia_intreq_relevel(); irq_update(); return;
     case 0x09E: adkcon = setclr(adkcon, v); return;
     case 0x088: if (jmp_wlog < 4) { logmsg("[CL ] COPJMP1 strobe%s\n", copper_writing ? " (COPPER)" : ""); jmp_wlog++; }
                 copper_jmp(1); return;
