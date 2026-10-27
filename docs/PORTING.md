@@ -297,6 +297,22 @@ prochain mot DSKSYNC (non stocké), sans DSKBLK si la piste n'en contient pas. D
 instantané. `tests/pc` `make testdisk` (stubs) : 12 contrôles, 6 échouent sur l'ancienne version.
 Carte : Workbench boote (130 lectures de piste, aucune sans sync), repos atteint vers la trame 1450.
 
+## Piste de 6 334 mots et fetch Denise DDFSTRT/DDFSTOP (2026-10-27)
+
+- `disk.cpp` : gap de 700 octets (350 mots, choix WinUAE) → révolution de 6 334 mots = 200 ms
+  (avant : 6 399 mots). Carte : WB 1.3 boote avec la ROM clean-room KickStopStart (102 lectures,
+  toutes DSKBLK, lectures de 6 400 mots = tour complet + 66 mots).
+- `video.cpp` : le fetch suit DDFSTRT/DDFSTOP (HRM : lores `(stop-strt)/8+1` mots, hires
+  `(stop-strt)/4+2`). Avant, 40/80 octets fixes : l'écran de boot overscan de KickStopStart
+  (DDF 0x30-0xD8, 22 mots, 5 plans, 352×272) dérivait de 4 octets par ligne → bandes de déchets.
+  La sortie reste la fenêtre standard 320/640 px (overscan rogné de 16 px par côté, fenêtre plus
+  étroite → COLOR00). DDF standard ou non programmé : chemin d'origine inchangé (empreinte
+  `testdenise` identique). `make testdenise` contrôle aussi un cas overscan (échoue sur l'ancien
+  code : BPL1PT 0x3800 au lieu de 0x3C00).
+- Mesure carte (kickonly, écran de boot 5 plans, ROM en attente disque) : 30,0 ms/trame après
+  `memcpy` de la fenêtre (39 ms avec une copie octet par octet). Bureau WB 1.3 de référence
+  (8,5 ms) non re-mesuré : KS 1.3 officielle non flashée dans cette session.
+
 ## Optimisations Denise + limiteur 50 Hz (2026-10-07)
 
 Mesures sur la carte, firmware normal (Workbench embarqué, sans SD), temps réel horodaté côté PC

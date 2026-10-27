@@ -4,6 +4,7 @@
  *     la posizione orizzontale del WAIT è ignorata)
  *   - Fetch bitplane standard lores 320px (DDFSTRT/STOP non interpretati:
  *     assunta finestra standard 0x38/0xD0 come quella del KS)
+ *     [Portage VGA32 : désormais interprétés pour le fetch, cf. denise_render_line]
  *   - Niente sprite, niente HAM, niente dual playfield, niente hires
  * Sufficiente e corretto per la schermata insert-disk del KS 1.3.
  */
@@ -390,7 +391,34 @@ void denise_render_line(void)
     int pixels        = hires ? 640 : 320;
     DPROF(DP_WIN)
 
+    /* Portage VGA32 : DDFSTRT/DDFSTOP interprétés (HRM : lores (stop-strt)/8+1 mots, hires
+     * (stop-strt)/4+2). La sortie reste la fenêtre standard (lores 0x38, hires 0x3C) : en
+     * overscan les mots hors fenêtre sont lus (le pointeur avance du fetch réel, sinon l'image
+     * se décale de ligne en ligne) mais non affichés ; une fenêtre plus étroite laisse du
+     * COLOR00. DDF non programmé (stop <= strt) : fenêtre standard, comme avant. */
     uint8_t line[6][80];
+    const int ddf_unit = hires ? 4 : 8, ddf_std = hires ? 0x3C : 0x38;
+    const int ddfstrt = custom_get(0x092) & (hires ? 0xFC : 0xF8);
+    const int ddfstop = custom_get(0x094) & (hires ? 0xFC : 0xF8);
+    if (ddfstop > ddfstrt &&
+        (ddfstrt != ddf_std || ddfstop != ddf_std + (bytes_per_row / 2 - (hires ? 2 : 1)) * ddf_unit)) {
+        const int fetch_bytes = 2 * ((ddfstop - ddfstrt) / ddf_unit + (hires ? 2 : 1));   /* <= 130 */
+        const int skip = 2 * (ddf_std - ddfstrt) / ddf_unit;   /* octets fetchés avant la fenêtre */
+        uint8_t tmp[130];
+        for (int p = 0; p < nplanes; p++) {
+            const uint32_t pt = bpl_pt[p] & 0x7FFFF;
+            if (skip >= 0 && skip + bytes_per_row <= fetch_bytes && pt + (uint32_t)fetch_bytes <= 0x80000) {
+                memcpy(line[p], &chip_ram[pt + (uint32_t)skip], bytes_per_row);   /* overscan : bloc PSRAM */
+            } else {
+                for (int b = 0; b < fetch_bytes; b++) tmp[b] = chip_ram[(pt + (uint32_t)b) & 0x7FFFF];
+                for (int b = 0; b < bytes_per_row; b++) {
+                    const int s = b + skip;
+                    line[p][b] = (s >= 0 && s < fetch_bytes) ? tmp[s] : 0;
+                }
+            }
+            bpl_pt[p] = pt + (uint32_t)fetch_bytes + (uint32_t)(int16_t)custom_get((p & 1) ? 0x10A : 0x108);
+        }
+    } else
     for (int p = 0; p < nplanes; p++) {
         uint32_t pt = bpl_pt[p] & 0x7FFFF;
         /* lettura a BLOCCO invece che byte-per-byte: la PSRAM e' molto piu'

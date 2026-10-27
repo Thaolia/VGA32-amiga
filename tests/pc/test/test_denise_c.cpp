@@ -45,6 +45,30 @@ int main(void)
         while ((ch = fgetc(in)) != EOF) { hsh ^= (uint8_t)ch; hsh *= 1099511628211ull; }
         fclose(in);
     }
+    /* Overscan lores (DDF 0x30-0xD8 = 22 mots, cas de l'écran de boot KickStopStart) : lignes
+     * de 44 octets, 2 octets de bord FF de chaque côté hors fenêtre, 40 octets nuls dedans.
+     * Attendu : pointeur avancé de 44 octets par ligne affichée, fenêtre entièrement COLOR00. */
+    for (uint32_t i = 0; i < CHIP_SIZE; i++) chip_ram[i] = 0;
+    for (int r = 0; r < 256; r++)
+        chip_ram[0x1000 + 44 * r] = chip_ram[0x1000 + 44 * r + 1] =
+            chip_ram[0x1000 + 44 * r + 42] = chip_ram[0x1000 + 44 * r + 43] = 0xFF;
+    for (int i = 0; i < 0x100; i++) s_regs[i] = 0;
+    s_regs[0x100 >> 1] = 0x1200;                                            /* 1 plan lores */
+    s_regs[0x08E >> 1] = 0x2C81; s_regs[0x090 >> 1] = 0x2CC1;
+    s_regs[0x092 >> 1] = 0x0030; s_regs[0x094 >> 1] = 0x00D8;
+    s_regs[0x182 >> 1] = 0x0FFF;
+    bpl_pt[0] = 0x1000;
+    for (vpos = 0; vpos < 312; vpos++) denise_render_line();
+    if (bpl_pt[0] != 0x1000u + 44u * 256u) { printf("FAIL overscan : BPL1PT=%05X\n", (unsigned)bpl_pt[0]); return 1; }
+    if (video_write_ppm("test_denise.ppm") != 0) return 1;
+    FILE *in = fopen("test_denise.ppm", "rb");
+    if (!in) return 1;
+    for (int nl = 0; nl < 3; ) { const int ch = fgetc(in); if (ch == EOF) return 1; if (ch == '\n') nl++; }
+    int ch;
+    while ((ch = fgetc(in)) != EOF)
+        if (ch) { fclose(in); printf("FAIL overscan : pixel hors COLOR00\n"); return 1; }
+    fclose(in);
+
     printf("%016llx\n", (unsigned long long)hsh);
     return 0;
 }
