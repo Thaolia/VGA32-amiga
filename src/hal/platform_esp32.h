@@ -70,8 +70,8 @@
 #define VGA32_SERIAL_KBD   1
 
 /* ---- Timing trame PAL (repris des #define de l'ancien a500_esp32.ino) ----
- * 1 trame PAL = 312 lignes de 455 cycles CPU. Non présents dans a500.h. */
-#define LINES_PAL   312
+ * 1 trame PAL = 313 lignes de 455 cycles CPU. Non présents dans a500.h. */
+#define LINES_PAL   313   /* trame longue PAL (LOF=1, non entrelacé) : lignes 0..312 */
 #define CYC_LINE    455
 
 /* ---- Ordonnancement ----

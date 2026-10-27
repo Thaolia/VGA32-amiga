@@ -82,7 +82,7 @@ cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kicksta
 ## Flux d'une trame
 
 1. `emu_task` : `input_ps2_poll` → `input_frame` → `copper_vblank` → `sprite_vblank`.
-2. Pour chaque ligne (0..311) : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
+2. Pour chaque ligne (0..312, trame longue PAL) : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
    (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne) → `m68k_execute(455)` →
    `paula_step` (colorclock) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick` (rotation,
    index /FLG) → `cia_tod_hsync`.

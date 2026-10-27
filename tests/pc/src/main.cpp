@@ -1,6 +1,6 @@
 /* Runner Fase 0.
  * Uso:  a500 <kickstart.rom> [frame] [--trace N] [--tracefile out.txt]
- *   - esegue N frame PAL (default 100) a 455 cicli CPU/linea, 312 linee
+ *   - esegue N frame PAL (default 100) a 455 cicli CPU/linea, 313 linee
  *   - --trace N: disassembla le prime N istruzioni (confronto col ground truth)
  *   - a fine corsa: PC corrente + istogramma degli ultimi PC (rileva stalli,
  *     stessa tecnica dello stallo 0x015B di Bubble Bobble)
@@ -18,7 +18,7 @@ extern "C" {
 void cia_tod_hsync(void);
 void cia_tod_vsync(void);
 
-#define LINES_PAL   312
+#define LINES_PAL   313   /* trame longue PAL (LOF=1, non entrelacé) : lignes 0..312 */
 #define CYC_LINE    455
 
 int cur_frame = 0;
