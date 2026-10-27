@@ -311,7 +311,40 @@ Carte : Workbench boote (130 lectures de piste, aucune sans sync), repos atteint
   code : BPL1PT 0x3800 au lieu de 0x3C00).
 - Mesure carte (kickonly, écran de boot 5 plans, ROM en attente disque) : 30,0 ms/trame après
   `memcpy` de la fenêtre (39 ms avec une copie octet par octet). Bureau WB 1.3 de référence
-  (8,5 ms) non re-mesuré : KS 1.3 officielle non flashée dans cette session.
+  (8,5 ms) non re-mesuré : KS 1.3 officielle non flashée dans cette session. Moniteur VGA :
+  écran de boot affiché correctement (constaté par l'utilisateur le 2026-10-27).
+
+## Améliorations issues des analyses KickSlopStart (2026-10-27)
+
+Source : `../KickSlopStart/docs/analysis/` (comportements matériels attendus par KS 1.3).
+1. `disk.cpp` : lecture DMA sans disque ou moteur arrêté : sans WORDSYNC, `len` mots nuls puis
+   DSKBLK (trackdisk 1.3 lit sans WORDSYNC et attend DSKBLK sans délai maximal : une éjection en
+   pleine lecture le bloquait) ; avec WORDSYNC, toujours en attente (`FLOPPY_SPEC.md` §B12).
+2. `disk_switch.cpp` : DF0 vide au moins `DS_EMPTY_MS` = 3 s (`disk_select.cpp`,
+   `ds_mount_allowed`) : trackdisk ne sonde /CHNG que toutes les 0,5 à 2,5 s.
+3. `cia.cpp` / `custom.cpp` : effacer PORTS/EXTER dans INTREQ les relève si l'IR de la CIA est
+   encore à 1 (`cia_intreq_relevel`, niveau /INT2-/INT6) ; autoriser dans l'ICR une source déjà
+   en attente lève l'IRQ (AbleICR).
+4. `kbd_amiga.cpp` : acquittement = retombée de CRA bit 6 sur CIA-A (`cia_a_kbd_handshakes`),
+   plus la lecture de l'ICR (NOMAD lit SDR sans lire l'ICR) ; sans handshake après 8 trames, le
+   même code est réémis.
+5. `cia_tick_cpu` : 45,5 E par ligne (avant : 45, CIA 1 % trop lentes ; E = 709 379 Hz).
+6. Index du lecteur : `disk_line_tick()` (chaque ligne) cumule la rotation (65/32 mots par ligne,
+   `head_word` lit la même position) ; au passage du mot 0, front sur CIA-B /FLG (ICR bit 4 →
+   EXTER si autorisé) si DF0 est sélectionné, moteur en marche, disque présent (`FLOPPY_SPEC.md` §A4).
+7. Trame PAL longue de **313 lignes** (0..312, LOF=1 non entrelacé ; `LINES_PAL`, cible et
+   harnais) : VBlank à 49,92 Hz comme le matériel. La ligne 312 exécute copper/CPU/Paula/CIA
+   sans être affichée (gardes `FB_H` de `video.cpp` et `video_vga.cpp`). `check_audio.py` attend
+   désormais 3 × 313 × 455 cycles (2 656 échantillons).
+8. Sondes sans matériel (`$DC0000` RTC, `$D80000` ancienne adresse, `$E80000` fin d'autoconfig) :
+   toujours lues 0, plus journalisées. Pas de RTC MSM6242 émulée : `SetClock` 1.3 ne gère pas les
+   années 00-77, une horloge à la date réelle donnerait une date système fausse (sans RTC,
+   l'heure vient du bloc racine de DF0).
+Tests : `make testcia` (nouveau), `testdisk` (lecteur vide, index), `tests/hal` `test_kbd_amiga`
+(nouveau) et `test_disk_select` (délai) ; chacun échoue sur l'ancien code.
+Carte (kickonly, KickStopStart, sans disque) : boot sans erreur, écran de boot 29,3 ms/trame
+(30,0 avant), heap interne 136,7 Ko. Clavier, changement de disquette et index non vérifiés sur
+matériel (demandent un disque inséré et `remote_input.py`).
 
 ## Optimisations Denise + limiteur 50 Hz (2026-10-07)
 
