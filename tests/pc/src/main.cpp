@@ -197,7 +197,7 @@ int main(int argc, char **argv)
                 paula_cc_acc &= 1;
                 paula_step(paula_cc);        /* audio: Paula avanza in colorclock, non in cicli CPU */
             }
-            cia_tick(CYC_LINE / 10);
+            cia_tick_cpu(CYC_LINE);
             cia_tod_hsync();
             if (bench) { clock_gettime(CLOCK_MONOTONIC, &tb);
                 t_chip += (tb.tv_sec-ta.tv_sec)*1000000000LL + (tb.tv_nsec-ta.tv_nsec); }

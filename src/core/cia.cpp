@@ -206,6 +206,16 @@ void cia_tick(int eclocks)
     timers_tick(&cia_b, eclocks);
 }
 
+/* Portage VGA32 : E = CPU/10 et une ligne PAL fait 455 cycles, soit 45,5 E ; le reste est
+ * reporté (cia_tick(CYC_LINE/10) donnait 45 E/ligne, CIA 1 % trop lentes). */
+void cia_tick_cpu(int cpu_cycles)
+{
+    static int acc = 0;
+    acc += cpu_cycles;
+    cia_tick(acc / 10);
+    acc %= 10;
+}
+
 /* Portage VGA32 : /INT2 et /INT6 des CIA sont des niveaux. Effacer PORTS/EXTER dans INTREQ
  * alors que l'ICR n'a pas été lu (IR encore à 1) les relève aussitôt : exec n'acquitte qu'après
  * toute la chaîne de serveurs, un événement CIA arrivé entre-temps ne doit pas être perdu. */

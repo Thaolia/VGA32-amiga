@@ -328,7 +328,7 @@ static void emu_task(void *arg)
             paula_cc_acc &= 1;
             PROF_MARK(P_PAULA);
 
-            cia_tick(CYC_LINE / 10);
+            cia_tick_cpu(CYC_LINE);
             cia_tod_hsync();
             PROF_MARK(P_CIA);
         }

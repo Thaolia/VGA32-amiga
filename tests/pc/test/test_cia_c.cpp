@@ -76,6 +76,13 @@ int main(void)
     CHECK(intreq & 0x0008);
     CHECK((cia_read(&cia_a, 0xD) & 0x81) == 0x81);
 
+    /* E-clock : 2 lignes PAL de 455 cycles CPU = 91 E (45,5 par ligne, pas 2 x 45) */
+    cia_write(&cia_a, 0xE, 0x00);
+    cia_write(&cia_a, 0x4, 0xFF); cia_write(&cia_a, 0x5, 0xFF);
+    cia_write(&cia_a, 0xE, 0x01);
+    cia_tick_cpu(455); cia_tick_cpu(455);
+    CHECK(cia_a.ta == 0xFFFF - 91);
+
     /* handshake clavier : CRA bit 6 mis puis remis à 0 sur CIA-A = un acquittement ;
        sur CIA-B, ou sans retombée, rien */
     const uint32_t hs = cia_a_kbd_handshakes;

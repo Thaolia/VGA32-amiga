@@ -50,6 +50,7 @@ void    cia_reset(void);
 uint8_t cia_read (cia_t *c, int reg);
 void    cia_write(cia_t *c, int reg, uint8_t v);
 void    cia_tick (int eclocks);      /* E-clock = CPU/10 */
+void    cia_tick_cpu(int cpu_cycles); /* idem en cycles CPU, reste reporté (portage VGA32) */
 void    cia_intreq_relevel(void);    /* INTREQ PORTS/EXTER = niveau IRQ des CIA (portage VGA32) */
 #ifdef ARDUINO
 void    cia_a_kbd_shift_in(uint8_t sdr_value);  /* clavier Amiga -> SP CIA-A (portage VGA32) */
