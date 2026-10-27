@@ -90,6 +90,12 @@ int main(void)
     CHECK(press(&d, &t, &idx) == DS_SHOW && idx == 1);
     CHECK(ds_update(&d, t_press + DS_COMMIT_MS, 0, &idx) == DS_LOAD && idx == 1);
 
+    /* lecteur vide au moins DS_EMPTY_MS, y compris à travers le wrap de millis() */
+    CHECK(!ds_mount_allowed(1000, 1000 + DS_EMPTY_MS - 1));
+    CHECK(ds_mount_allowed(1000, 1000 + DS_EMPTY_MS));
+    CHECK(!ds_mount_allowed(0xFFFFFFFFu - 100, 500));
+    CHECK(ds_mount_allowed(0xFFFFFFFFu - 100, DS_EMPTY_MS));
+
     if (fails) { printf("%d echec(s)\n", fails); return 1; }
     printf("disk_select : OK\n");
     return 0;

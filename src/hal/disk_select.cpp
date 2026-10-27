@@ -47,3 +47,8 @@ void ds_load_failed(ds_t *d, int prev_cur)
     d->cur = prev_cur;
     d->sel = prev_cur;
 }
+
+int ds_mount_allowed(uint32_t eject_ms, uint32_t now_ms)
+{
+    return now_ms - eject_ms >= DS_EMPTY_MS;     /* soustraction non signée : passe le wrap */
+}

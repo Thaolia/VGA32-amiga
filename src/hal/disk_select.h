@@ -12,6 +12,10 @@
 
 #define DS_DEBOUNCE_MS  150u    /* écart min. entre deux appuis acceptés */
 #define DS_COMMIT_MS   1500u    /* délai sans appui avant de charger la sélection */
+/* DF0 reste vide au moins ce temps à un changement : trackdisk ne regarde /CHNG que toutes
+ * les 0,5 à 2,5 s et le file system au mieux chaque seconde ; un échange plus rapide n'est
+ * pas vu comme une éjection (ancien volume jamais retiré). */
+#define DS_EMPTY_MS    3000u
 
 typedef enum { DS_NONE, DS_SHOW, DS_LOAD } ds_action_t;
 
@@ -33,5 +37,8 @@ ds_action_t ds_update(ds_t *d, uint32_t now_ms, int down, int *idx);
 
 /* Le chargement demandé a échoué : le disque inséré redevient prev_cur. */
 void ds_load_failed(ds_t *d, int prev_cur);
+
+/* Le disque lu peut-il être monté ? (DF0 vide depuis eject_ms, au moins DS_EMPTY_MS) */
+int ds_mount_allowed(uint32_t eject_ms, uint32_t now_ms);
 
 #endif /* DISK_SELECT_H */

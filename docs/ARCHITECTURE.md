@@ -52,7 +52,8 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   liste triée des `.adf` DD de la racine au boot ; lecture par blocs de 512 o dans un buffer donné.
 - `disk_switch.cpp` + `disk_select.cpp` : **changement de disquette au bouton IO36** — logique pure
   (anti-rebond, sélection circulaire, validation 1,5 s après le dernier appui) + glue : OSD du
-  nom, `drive_eject` → tâche `adfload` (lecture SD sur le cœur VGA) → `drive_mount_ready`.
+  nom, `drive_eject` → tâche `adfload` (lecture SD sur le cœur VGA) → `drive_mount_ready`, pas avant
+  `DS_EMPTY_MS` (3 s) de lecteur vide, pour que trackdisk voie l'éjection.
 - `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
   (`cia_a_kbd_shift_in`) + IRQ série (INT2). Table VirtualKey→rawcode positionnelle dans
   `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit désormais le registre + nouveau hook.

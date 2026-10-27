@@ -24,6 +24,8 @@ static bool          s_busy;     /* lecture en cours (DF0 éjecté) */
 static int           s_loading;  /* index en cours de lecture */
 static int           s_next = -1;/* index validé pendant une lecture, à enchaîner */
 static uint8_t      *s_buf;      /* buffer ADF du lecteur (PSRAM), obtenu dans setup() */
+static bool          s_mount;    /* lu avec succès, montage différé (DS_EMPTY_MS) */
+static uint32_t      s_eject_ms; /* début de la période DF0 vide */
 
 static void loader_task(void *arg)
 {
@@ -48,7 +50,9 @@ static void show_name(const char *prefix, int idx)
 
 static void start_load(int idx)
 {
+    if (drive_adf()) s_eject_ms = millis();       /* DF0 était plein : la période vide commence */
     drive_eject();                                /* avant toute écriture du buffer */
+    s_mount = false;
     s_busy = true;
     s_loading = idx;
     xQueueSend(s_req, &idx, portMAX_DELAY);
@@ -95,11 +99,16 @@ void disk_switch_poll(void)
             s_next = -1;
             start_load(n);
         } else if (ok) {
-            drive_mount_ready();
+            s_mount = true;
         } else {
             /* buffer partiellement écrasé : DF0 reste vide */
             ds_load_failed(&s_ds, -1);
             show_name("Erreur SD: ", s_loading);
         }
+    }
+
+    if (s_mount && ds_mount_allowed(s_eject_ms, millis())) {
+        s_mount = false;
+        drive_mount_ready();
     }
 }
