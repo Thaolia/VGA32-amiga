@@ -161,7 +161,18 @@ void disk_dsklen_write(uint16_t v)
         return;
     }
     if (!drive_adf() || !drive_motor_on()) {
-        logmsg("[DSK] lettura senza disco/motore: nessun dato\n");
+        /* Portage VGA32 (docs/FLOPPY_SPEC.md §B12) : pas de flux = zéros. Sans WORDSYNC le DMA va
+         * au bout (trackdisk 1.3 attend DSKBLK sans délai maximal) ; avec WORDSYNC il ne finit pas. */
+        if (adkcon & 0x0400) {
+            logmsg("[DSK] lettura senza disco/motore (WORDSYNC): DMA in attesa\n");
+            return;
+        }
+        for (int k = 0; k < len; k++) {
+            chip_ram[(pt + 2u * (uint32_t)k) & 0x7FFFF]      = 0;
+            chip_ram[(pt + 2u * (uint32_t)k + 1u) & 0x7FFFF] = 0;
+        }
+        logmsg("[DSK] lettura senza disco/motore: %d word nulle -> %05X, DSKBLK\n", len, pt);
+        disk_irq_pending = 1;
         return;
     }
     int track = drive_track() * 2 + drive_side();

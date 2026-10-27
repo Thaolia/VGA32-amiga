@@ -94,6 +94,7 @@ sync absent.
 - **B12. Pas de données** : lecteur sélectionné moteur arrêté → bits aléatoires [WU] ; aucun lecteur
   → niveau constant [WU] ; disque absent → zéros ; piste hors image → bruit. Sans WORDSYNC le DMA
   finit avec des déchets ; avec WORDSYNC il ne finit jamais (le logiciel sort par timeout).
+  **Fait** (2026-10-27) : disque absent ou moteur arrêté → zéros + DSKBLK sans WORDSYNC.
 - **B13.** ADKCON FAST = 0 : cellule de 4 µs (GCR) ; lire du MFM DD ainsi = une cellule sur deux [WU].
   Priorité faible.
 

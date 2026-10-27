@@ -14,7 +14,8 @@ int vpos, hpos, cur_frame;
 static uint16_t s_regs[0x100];
 uint16_t custom_get(uint32_t off) { return s_regs[off >> 1]; }
 static uint8_t s_adf[901120];
-const uint8_t *drive_adf(void) { return s_adf; }
+static int s_nodisk = 0;
+const uint8_t *drive_adf(void) { return s_nodisk ? nullptr : s_adf; }
 int drive_track(void) { return 0; }
 int drive_side(void) { return 0; }
 int drive_motor_on(void) { return 1; }
@@ -77,6 +78,21 @@ int main(void)
     s_regs[0x07E >> 1] = 0x1234;
     CHECK(read_at(0, 0, 600) == 0);
     CHECK(w16(0) == 0 && w16(100) == 0);
+
+    /* lecteur vide (§B12) : sans WORDSYNC le DMA finit (zéros écrits, DSKBLK) ; avec WORDSYNC
+       aucun sync n'arrive, il ne finit jamais. Trackdisk 1.3 lit sans WORDSYNC et attend DSKBLK
+       sans délai maximal : sans fin de DMA, une éjection pendant la lecture le bloque. */
+    s_nodisk = 1;
+    adkcon = 0;
+    memset(chip_ram, 0xEE, 0x10000);
+    cur_frame = 0; vpos = 0; disk_irq_pending = 0;
+    disk_dsklen_write(0x8000 | 100); disk_dsklen_write(0x8000 | 100);
+    CHECK(disk_irq_pending == 1);
+    CHECK(w16(0) == 0 && w16(198) == 0 && w16(200) == 0xEEEE);
+    adkcon = 0x0400;
+    s_regs[0x07E >> 1] = 0x4489;
+    CHECK(read_at(0, 0, 600) == 0);
+    s_nodisk = 0;
 
     printf("disk : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;
