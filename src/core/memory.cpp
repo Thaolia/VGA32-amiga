@@ -93,6 +93,10 @@ static void unmapped(const char *op, uint32_t a)
 {
     static uint32_t seen[64]; static int nseen = 0;
     uint32_t page = a >> 16;
+    /* Portage VGA32 : sondes normales sans matériel, lues 0 comme avant mais sans log : horloge
+     * MSM6242 en $DC0000 et son ancienne adresse $D80000 (SetClock, SysInfo), fin de chaîne
+     * autoconfig en $E80000. Pas de RTC émulée : SetClock 1.3 ne gère pas les années 00-77. */
+    if (page == 0xD8 || page == 0xDC || page == 0xE8) return;
     for (int i = 0; i < nseen; i++) if (seen[i] == page) return;
     if (nseen < 64) seen[nseen++] = page;
     logmsg("[MEM] %s non mappato: %06X (PC=%06X)\n", op, a,
