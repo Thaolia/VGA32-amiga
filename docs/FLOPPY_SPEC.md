@@ -41,9 +41,9 @@ sync absent.
   ≈ 32,5 cellules ≈ 2,03 mots. Une trame (312 lignes) ≈ 10 100 cellules.
 - **A2. Révolution** : 300 tr/min = 200 ms [HW], soit ≈ 101 340 cellules = 6 334 mots à la cadence
   Paula PAL. Piste AmigaDOS : 11 secteurs × 544 mots = 5 984 mots + gap. WinUAE prend un gap de
-  350 mots pour faire exactement 6 334 mots [WU]. Notre révolution (12 798 octets, gap 830) dure
-  ≈ 202 ms à cadence Paula : dans la tolérance mécanique. Deux choix valables : garder la cadence
-  (la période suit le buffer) ou mettre la cellule à l'échelle pour 200 ms (choix de WinUAE) [WU].
+  350 mots pour faire exactement 6 334 mots [WU]. Notre révolution suit ce choix depuis le
+  2026-10-27 : 12 668 octets (gap 700 octets = 350 mots), soit 200 ms à cadence Paula (avant :
+  12 798 octets, gap 830, 6 399 mots ≈ 202 ms, plus longue que la piste WinUAE).
 - **A3. Position de rotation** : compteur de bits modulo la longueur de piste, qui avance avec le temps
   émulé, indépendamment du DMA. Elle avance moteur en marche, sélectionné ou non ; moteur arrêté,
   WinUAE la fige [WU]. Changement de piste ou de face : position conservée (ou mise à l'échelle si les

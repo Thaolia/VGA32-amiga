@@ -18,7 +18,9 @@
 
 #define SEC_MFM   1088
 #define NSEC      11
-#define GAP_BYTES 830                 /* riempitivo 0xAA tra fine e inizio */
+/* Portage VGA32 : gap de 350 mots comme WinUAE, révolution de 6 334 mots = 200 ms à cadence
+ * Paula PAL (docs/FLOPPY_SPEC.md §A2) ; l'ancien gap de 830 octets donnait 6 399 mots. */
+#define GAP_BYTES 700                 /* riempitivo 0xAA tra fine e inizio */
 #define REV_BYTES (NSEC * SEC_MFM + GAP_BYTES)
 
 int disk_irq_pending = 0;
