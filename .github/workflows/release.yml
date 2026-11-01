@@ -51,4 +51,4 @@ jobs:
             --target "$GITHUB_SHA" --latest \
             --title "Build $sha (KickSlopStart $kss)" \
             --notes "Commit $GITHUB_SHA — KickSlopStart $kss, env ttgo-vga32-kss-kickonly.
-          Image unique à flasher à l'adresse 0x00000000 (https://g3gg0.github.io/esp32_flasher/flasher.html)."
+          Image unique à flasher à l'adresse 0x00000000 (https://esptool.spacehuhn.com/, offset 0)."

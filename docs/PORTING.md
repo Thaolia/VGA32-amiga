@@ -560,9 +560,15 @@ carte avant de les activer ; blitter asynchrone (BBUSY, attente de BLTEN), DMA d
 sans DSKEN (B3), limites DDF, contention copper/bitplanes, genlock ERSY, filtre audio, modulation
 ADKCON : impact faible ou émulateur seulement plus permissif. Chemin PS/2 (auto-repeat, Caps
 Lock) non traité : inutilisé sur le poste de l'utilisateur.
-**Non vérifié sur matériel** (carte débranchée le 2026-11-01) : temps de trame (VHPOSR et miroir
-touchent le chemin des accès), `ttgo-vga32-stress` (memory.cpp modifié), reset clavier par
-`remote_input.py` F11.
+**Carte (2026-11-01, release `build-20261101-25ee1eb` flashée par le web, KickSlopStart v0.2.1,
+SD sans `wb.adf`)** : boot sans panic, `PC=FC00D2`, `[FLASH]` 23,1 Mo/s ; 15,4 ms/trame avant
+l'écran de boot, **27,1 ms/trame** sur l'écran de boot 5 plans (29,3 ms mesurés avec la v0.1 :
+ROM différente, comparaison indicative) ; heap interne 133,5 Ko ; PSRAM libre 270 Ko puis 73 Ko
+dès l'affichage de l'écran de boot (trame ~1 150, stable ensuite). Reset clavier (trames `K`
+Ctrl/Amiga G/Amiga D, comme F11) : `[RESET] reset clavier`, `PC=FC00D2`, retour à l'écran de boot
+(27,6 ms/trame), aucun panic. `ttgo-vga32-stress` : CRC de la RAM Amiga identiques sur deux boots
+(trames 500 à 3 500), 0 erreur sur ~6 130 passes de stress PSRAM. Bureau WB 1.3 de référence
+(8,5 ms) non re-mesuré (pas de `wb.adf` sur la SD).
 
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
@@ -575,10 +581,11 @@ touchent le chemin des accès), `ttgo-vga32-stress` (memory.cpp modifié), reset
 - `firmware-merged.bin` (1 011 376 o) : les 4 segments sont identiques aux binaires source à leurs
   offsets. Bootloader : octets d'en-tête 0x02/0x20 (DIO, 4 Mo, 40 MHz) laissés tels que le build
   les pose (`--flash_mode keep`) — réécrire le mode invaliderait le SHA-256 ajouté au bootloader.
-- Flasheur web [g3gg0](https://g3gg0.github.io/esp32_flasher/flasher.html) : pas de chargement par
-  URL (fichier local uniquement), adresse 0x00000000 par défaut → une image unique est le format adapté.
-- **Non vérifié sur matériel** (carte non branchée le 2026-11-01) : flash de l'image fusionnée à
-  0x0 et boot KickSlopStart v0.2.1 à confirmer au moniteur série/VGA.
+- Flasheur web retenu : [ESPTool de Spacehuhn](https://esptool.spacehuhn.com/) (esptool-js), mode
+  fichier unique à l'offset 0 par défaut ; pas de chargement par URL → image unique téléchargée
+  depuis la release. Laisser l'onglet connecté verrouille le port série (`Device or resource busy`).
+- **Validé sur la carte** (2026-11-01) : image de la release flashée par ce flasheur, boot
+  KickSlopStart v0.2.1 (voir la 3e passe ci-dessus).
 - `assets/kick_rom.h` local contenait encore KickStopStart v0.1 (CRC32 `886426AC`, chaîne
   `exec 34.2 (clean-room reimpl)`), pas le KS 1.3 officiel : les envs non-`kss` l'embarquent.
 
