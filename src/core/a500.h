@@ -70,6 +70,7 @@ uint16_t custom_get  (uint32_t off);          /* latch senza effetti collaterali
 void     custom_set_latch(uint32_t off, uint16_t v);  /* writeback puntatori blitter */
 void     blitter_do(uint16_t bltsize);        /* esegue un blit (area o line) */
 extern int blit_irq_pending;                  /* done-int differito di una linea */
+extern int blit_zero;                         /* portage VGA32 : BZERO de DMACONR (dernier blit) */
 long long blitter_ns(void);                   /* tempo cumulato nel blitter (benchmark) */
 void     irq_update(void);           /* ricalcola IPL verso Musashi */
 void     intreq_set(int bit);        /* usato da CIA/vblank */
@@ -166,6 +167,7 @@ static inline void wr_be16(uint8_t *p, uint16_t v) { *(amiga_u16_t *)p = __built
 void mem_map_update(void);   /* portage VGA32 : à appeler quand l'overlay ROM change */
 void mem_reset_instr(void);  /* portage VGA32 : callback Musashi de l'instruction RESET */
 void mem_reset_poll(void);   /* portage VGA32 : après m68k_execute, fin d'un RESET différé */
+void mem_system_reset(void); /* portage VGA32 : /RESET système (reset clavier), RAM conservée */
 
 /* ---- log & trace ---- */
 extern FILE *tracef;

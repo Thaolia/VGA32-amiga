@@ -25,20 +25,44 @@
 #define KBD_FIFO       32
 #define KBD_ACK_FRAMES 8          /* 160 ms > délai d'attente du handshake du MPU réel */
 
+/* Reset clavier (HRM, keyboard-handshake-v34.md §5) : la 3e touche de Ctrl + Amiga + Amiga
+ * devient l'avertissement $78. Sans handshake en 250 ms (machine plantée), /RESET tout de suite ;
+ * sinon un 2e $78, dont keyboard.device tient le handshake (CRA bit 6) jusqu'au dernier reset
+ * handler, 10 s au plus, puis /RESET. */
+#define KBD_RESET_WARN      0x78
+#define KBD_WARN1_FRAMES    13    /* 260 ms */
+#define KBD_WARN2_FRAMES    500   /* 10 s */
+#define KBD_CTRL            0x63
+#define KBD_LAMIGA          0x66
+#define KBD_RAMIGA          0x67
+
 static uint8_t s_raw[KBD_FIFO];
 static uint8_t s_down[KBD_FIFO];
 static int s_head, s_tail, s_count;
 static bool s_wait_ack;           /* code de tête émis, handshake attendu */
 static int s_wait_frames;
 static uint32_t s_hs_at_send;
+static int s_held;                /* bits : Ctrl, Amiga gauche, Amiga droite enfoncées */
+static int s_warn;                /* avertissements $78 en file ou émis (0 = pas de reset) */
+static bool s_reset_req;
 
 void kbd_amiga_init(void)
 {
     s_head = s_tail = s_count = 0;
     s_wait_ack = false;
+    s_held = 0;
+    s_warn = 0;
+    s_reset_req = false;
 }
 
-void kbd_amiga_push(uint8_t rawcode, int down)
+int kbd_amiga_reset_requested(void)
+{
+    if (!s_reset_req) return 0;
+    s_reset_req = false;
+    return 1;
+}
+
+static void enqueue(uint8_t rawcode, int down)
 {
     if (s_count >= KBD_FIFO) {          /* plein : on jette le plus ancien */
         s_head = (s_head + 1) % KBD_FIFO;
@@ -49,6 +73,29 @@ void kbd_amiga_push(uint8_t rawcode, int down)
     s_down[s_tail] = down ? 1 : 0;
     s_tail = (s_tail + 1) % KBD_FIFO;
     s_count++;
+}
+
+void kbd_amiga_push(uint8_t rawcode, int down)
+{
+    rawcode &= 0x7F;
+    const int bit = rawcode == KBD_CTRL ? 1 : rawcode == KBD_LAMIGA ? 2 : rawcode == KBD_RAMIGA ? 4 : 0;
+    if (bit) s_held = down ? (s_held | bit) : (s_held & ~bit);
+    if (s_warn) return;                     /* séquence de reset en cours : clavier muet */
+    if (bit && down && s_held == 7) {
+        s_warn = 1;
+        enqueue(KBD_RESET_WARN, 1);
+        return;
+    }
+    enqueue(rawcode, down);
+}
+
+static void system_reset(void)
+{
+    s_head = s_tail = s_count = 0;
+    s_wait_ack = false;
+    s_warn = 0;
+    s_held = 0;
+    s_reset_req = true;
 }
 
 static void send_head(void)
@@ -63,14 +110,26 @@ static void send_head(void)
 
 void kbd_amiga_step(void)
 {
+    const bool warn_head = s_warn && s_count == 1 && s_raw[s_head] == KBD_RESET_WARN;
     if (s_wait_ack) {
         if (cia_a_kbd_handshakes == s_hs_at_send) {
-            if (++s_wait_frames >= KBD_ACK_FRAMES) send_head();   /* pas d'acquittement : réémission */
+            ++s_wait_frames;
+            if (warn_head) {                                      /* pas de réémission de $78 */
+                if (s_wait_frames >= (s_warn == 1 ? KBD_WARN1_FRAMES : KBD_WARN2_FRAMES))
+                    system_reset();
+            } else if (s_wait_frames >= KBD_ACK_FRAMES) {
+                send_head();                                      /* pas d'acquittement : réémission */
+            }
             return;
         }
         s_wait_ack = false;                                       /* acquitté : code consommé */
         s_head = (s_head + 1) % KBD_FIFO;
         s_count--;
+        if (warn_head) {
+            if (s_warn == 2) { system_reset(); return; }          /* fin des reset handlers */
+            s_warn = 2;
+            enqueue(KBD_RESET_WARN, 1);                           /* 2e avertissement */
+        }
     }
     if (s_count > 0) send_head();
 }

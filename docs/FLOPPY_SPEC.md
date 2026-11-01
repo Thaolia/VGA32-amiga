@@ -139,7 +139,7 @@ CIA-B PRB : bit 7 /MTR, bits 6-3 /SEL3-/SEL0 (bit 3 = DF0), bit 2 /SIDE, bit 1 /
 - **D8. /CHNG** : actif à l'éjection et disque absent ; après insertion, actif jusqu'au premier pas avec
   disque [HW]. WinUAE retarde l'insertion de ≈ 2 s après une éjection [WU] ; au reset disque présent,
   /CHNG inactif [WU].
-- **D9. /WPRO** : actif si disque protégé [HW] ou absent [WU].
+- **D9. /WPRO** : actif si disque protégé [HW] ou absent [WU]. **Fait** (2026-11-01, `drive_pra_bits`).
 
 ## E. DMA d'écriture et reconversion en ADF
 

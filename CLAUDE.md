@@ -131,7 +131,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Quality gates (avant de déclarer « fait »)
 
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
-   testjoy testaudio testreset testlace testcopper` (9 sentinelles synthétiques, sans ROM) au vert ;
+   testjoy testaudio testreset testlace testcopper testregs testsysreset` (11 sentinelles synthétiques,
+   sans ROM) au vert ;
    modif sous `#ifdef ARDUINO` → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula` ;
    blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise` ; CIA → `make testcia`.
    `testboot`/`testmfm` exigent `kick34005.A500` /

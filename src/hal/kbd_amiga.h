@@ -20,4 +20,8 @@ void kbd_amiga_push(uint8_t rawcode, int down);
 /* Fait avancer l'émission série vers CIA-A. Appelé périodiquement par emu_task. */
 void kbd_amiga_step(void);
 
+/* Reset clavier (Ctrl + Amiga gauche + Amiga droite) : 1 quand le clavier tire /RESET (à
+ * appliquer : mem_system_reset), une seule fois par séquence. */
+int kbd_amiga_reset_requested(void);
+
 #endif /* KBD_AMIGA_H */

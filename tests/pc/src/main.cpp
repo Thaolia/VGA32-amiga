@@ -74,6 +74,7 @@ int main(int argc, char **argv)
     const char *ppm_path = "screen.ppm";
     const char *ram_path = NULL;
     int bench = 0;
+    int sysreset_frame = -1;     /* --sysreset N : /RESET système (reset clavier) à la trame N */
     uint32_t ramload_addr = 0; const char *ramload_path = NULL;
     const char *wav_path = NULL;
     for (int i = 2; i < argc; i++) {
@@ -87,6 +88,7 @@ int main(int argc, char **argv)
             if (drive_insert_adf(argv[++i]) < 0) return 1;
         }
         else if (!strcmp(argv[i], "--benchmark")) bench = 1;
+        else if (!strcmp(argv[i], "--sysreset") && i + 1 < argc) sysreset_frame = atoi(argv[++i]);
         else if (!strcmp(argv[i], "--rw")) drive_set_write_protect(0);   /* disque écrivable */
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) {
             wav_path = argv[++i];
@@ -171,6 +173,7 @@ int main(int argc, char **argv)
 
     for (int f = 0; f < frames; f++) {
         cur_frame = f;
+        if (f == sysreset_frame) mem_system_reset();   /* reset clavier simulé */
         input_frame(f);
         copper_vblank();                 /* ricarica COP1LC a inizio frame */
         sprite_vblank();                 /* i canali sprite si riavviano */
@@ -257,7 +260,10 @@ int main(int argc, char **argv)
     /* ExecBase e LastAlert: distinguono boot pulito (LastAlert=FFFFFFFF)
        da Guru Meditation (LastAlert = codice alert, +0x206 = task) */
     uint32_t execbase = m68k_read_memory_32(4);
-    if (!ovl && execbase >= 0x100 && execbase < CHIP_SIZE - 0x300) {
+    /* KS 1.3 la place en slow RAM ($C00276) quand elle existe : depuis le miroir de la chip RAM
+       (portage VGA32), la ROM dimensionne la mémoire comme sur un A500 + 512 Ko */
+    if (!ovl && ((execbase >= 0x100 && execbase < CHIP_SIZE - 0x300) ||
+                 (execbase >= SLOW_BASE && execbase < SLOW_BASE + SLOW_SIZE - 0x300))) {
         uint32_t la  = m68k_read_memory_32(execbase + 0x202);
         uint32_t lat = m68k_read_memory_32(execbase + 0x206);
         logmsg("[FINE] ExecBase=%06X LastAlert=%08X task=%08X %s\n",

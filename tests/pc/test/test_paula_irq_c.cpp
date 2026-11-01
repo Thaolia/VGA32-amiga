@@ -72,5 +72,15 @@ int main()
     long dt = irq_n[10] > 1 ? irq_at[10][1] - off : -1;
     check("T4 coupure : au plus un mot (2 x 500 cc) plus tard", dt >= 0 && dt <= 1000 + CC_LINE, dt, 1000);
 
+    /* T5 : AUDxLEN = 0 vaut 65 536 mots (audio-device-v34.md §5.3, ioa_Length impair ou trop
+     * long) : le bloc dure 65 536 x 2 x 124 color clocks, pas un seul mot */
+    reset_all();
+    paula_write(0xA4, 0); paula_write(0xA6, 124);
+    paula_write(0xA0, 0); paula_write(0xA2, 0);
+    paula_set_dma(0x0201);
+    run(65536L * 2 * 124 + 4 * CC_LINE);
+    near("T5 LEN 0 : rechargement apres 65 536 mots", 7, 1, 65536L * 2 * 124, 2 * 124 + CC_LINE);
+    check("T5 LEN 0 : deux interruptions seulement", irq_n[7] == 2, irq_n[7], 2);
+
     return fails ? 1 : 0;
 }

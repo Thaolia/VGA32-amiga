@@ -520,6 +520,50 @@ l'invite disque, IO36 charge un ADF de la SD (le buffer ADF reste alloué). Env 
   dans les **deux** firmwares : la baisse depuis les ~170 Ko de la Phase 1 vient des phases 2-3,
   pas de cette variante.
 
+## Améliorations issues des analyses KickSlopStart, 3e passe (2026-11-01)
+
+Source : les 50 analyses de `../KickSlopStart/docs/analysis/` régénérées le 2026-11-01, lues par
+trois agents (vidéo/graphics/intuition, disque/CIA/clavier/audio, boot/exec/mémoire), chaque manque
+revérifié dans le code avant d'être retenu.
+1. **VHPOSR horizontal** (signalé par les trois agents ; cracktros-exit §3, monkey-startup §5) :
+   l'octet bas valait toujours 0 (`hpos` jamais mis à jour). Désormais `m68k_cycles_run() / 2`
+   (color clocks dans la tranche de la ligne, plafonné à $E2), calculé à la lecture seulement.
+2. **Port série** (timer-v34 §6.3, coldstart-hardware §8) : SERDATR lit `$3800` (TBE, TSRE, RXD au
+   repos) au lieu de 0 ; écrire SERDAT lève aussitôt TBE (INTREQ bit 0). Effet mesuré sur
+   KickSlopStart v0.2.1 (PC) : sa sortie de debug (`$FC27EA`, attente de TBE avec délai par
+   caractère) épuisait le délai à chaque caractère ; à la trame 400, l'ancien code était encore
+   dedans, IRQ masquées, le nouveau sert déjà les IRQ de niveau 3. Même écran de boot à la trame 1 500.
+3. **DMACONR BZERO** (alert-v34 §2.7) : `blit_zero`, OU de toutes les sorties D (même sans canal D,
+   détection de collision), modes normal et ligne.
+4. **Miroir de la chip RAM jusqu'à $1FFFFF** (coldstart-hardware §2) : lectures (table de pages) et
+   écritures. Conséquence : KS 1.3 détecte la mémoire comme un A500 + 512 Ko et place ExecBase en
+   **$C00276** (slow RAM) au lieu de la chip RAM. Le harnais (`tests/pc/src/main.cpp`) accepte
+   désormais ExecBase en slow RAM pour son contrôle LastAlert.
+5. **POTGOR** (alert-v34 §2.6) : une broche en sortie (OUTxx) se relit à DATxx au lieu du bouton.
+6. **/WPRO lecteur vide = actif** (`FLOPPY_SPEC.md` D9).
+7. **Paula AUDxLEN = 0 → 65 536 mots** (audio-device-v34 §5.3), valeur de reset comprise : avant,
+   une écriture de 0 donnait 1 mot (alors que le 0 du reset donnait 65 536 par débordement d'un
+   `uint16_t`). Empreinte `testpaula` refigée avec preuve (code avec LEN écrit 0 → 1 = ancienne
+   empreinte octet pour octet).
+8. **Reset clavier Ctrl-Amiga-Amiga** (keyboard-handshake §5, coldstart-hardware §7.1) : voir
+   `docs/ARCHITECTURE.md` (`kbd_amiga`, `mem_system_reset`). `remote_input.py` : **F11** envoie la
+   combinaison (Super droit souvent absent ou capturé par le système). PC : `a500 --sysreset N`,
+   KS 1.3 réinitialisé à la trame 400 → retour à l'écran d'insertion, LastAlert = FFFFFFFF.
+Tests : `make testregs` (VHPOSR, série, miroir, BZERO, POTGO, /WPRO), `make testsysreset` (mutant
+sans `custom_reset` détecté), `testpaula` (T5), `tests/hal` `test_kbd_amiga` (2 $78, délais) ; chacun
+échoue sur l'ancien code. Toutes les sentinelles vertes ; `testboot` : seul échoue toujours le
+critère « bitplane $A572 » (`MOVE 0E2,5AC2` déjà avant cette passe, adresse d'écran dépendant de
+l'allocation mémoire).
+**Écartés** : exceptions trace et address error de Musashi (`M68K_EMULATE_TRACE`/`ADDRESS_ERROR`,
+utiles aux protections type Copylock et au Guru 3) — coût par instruction/accès à mesurer sur la
+carte avant de les activer ; blitter asynchrone (BBUSY, attente de BLTEN), DMA disque suspendu
+sans DSKEN (B3), limites DDF, contention copper/bitplanes, genlock ERSY, filtre audio, modulation
+ADKCON : impact faible ou émulateur seulement plus permissif. Chemin PS/2 (auto-repeat, Caps
+Lock) non traité : inutilisé sur le poste de l'utilisateur.
+**Non vérifié sur matériel** (carte débranchée le 2026-11-01) : temps de trame (VHPOSR et miroir
+touchent le chemin des accès), `ttgo-vga32-stress` (memory.cpp modifié), reset clavier par
+`remote_input.py` F11.
+
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
 - `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au

@@ -65,7 +65,10 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   `DS_EMPTY_MS` (3 s) de lecteur vide, pour que trackdisk voie l'éjection.
 - `kbd_amiga.cpp` : **clavier Amiga émulé (P2, implémenté)** — FIFO de rawcodes → SDR de CIA-A
   (`cia_a_kbd_shift_in`) + IRQ série (INT2) ; code suivant après le handshake de l'hôte (CRA bit 6
-  retombé, `cia_a_kbd_handshakes`), réémission au bout de 8 trames sans handshake. Table
+  retombé, `cia_a_kbd_handshakes`), réémission au bout de 8 trames sans handshake. Ctrl + Amiga
+  gauche + Amiga droite : `$78` à la place de la 3e touche ; sans handshake en 13 trames, ou après
+  le handshake du 2e `$78` (10 s au plus), `kbd_amiga_reset_requested()` → `mem_system_reset()`
+  (CIA, Zorro, registres custom, DMA audio, `m68k_pulse_reset`, RAM conservée). Table
   VirtualKey→rawcode positionnelle dans `input_ps2.cpp`. `core/cia.cpp` : SDR (reg 0xC) lit
   désormais le registre + nouveau hook.
 - `serial_kbd.cpp` : **clavier + souris via port série USB (implémenté)** — octets de `Serial`
@@ -87,6 +90,8 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
 Carte mémoire Amiga : chip RAM 512 Ko ($000000), Fast RAM Zorro II autoconfig (`src/hal/zorro`,
 cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kickstart), slow RAM
 512 Ko ($C00000), ROM 256 Ko ($F80000), tout en PSRAM. `memory.cpp` consulte `zorro_page[a >> 16]` après chip/slow RAM.
+La chip RAM est répétée jusqu'à $1FFFFF (`CHIP_DECODE`, décodage 512 Ko de l'Agnus) : le Kickstart
+dimensionne alors la mémoire comme sur un A500 + 512 Ko et place ExecBase en slow RAM ($C00276).
 
 ## Flux d'une trame
 
@@ -97,7 +102,8 @@ cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kicksta
    appliquées) → `m68k_execute(455)` → `mem_reset_poll` (RESET depuis la chip RAM) →
    `paula_step` (colorclock, IRQ AUD0-3) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick`
    (rotation, index /FLG) → `cia_tod_hsync`.
-3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` →
+3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` (→ éventuel
+   `mem_system_reset` du reset clavier) →
    `disk_switch_poll` → `video_vga_osd_tick` → log `=== frame` (`VGA32_DEBUG`, temps de calcul,
    attente exclue) → `frame_end_wait` : avec `VGA32_FPS_LIMIT` (défaut 1), attente de l'échéance
    absolue de 20 ms (jamais plus de 50 trames/s, temps Amiga correct) ; toujours au moins un

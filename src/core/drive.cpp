@@ -145,9 +145,10 @@ uint8_t drive_pra_bits(void)
     if (!sel) return 0x3C;                    /* non selezionato: pull-up */
     uint8_t v = 0;
     if (!chng_latch) v |= 0x04;               /* /CHNG alto = latch azzerato (disco ok) */
-    if (!disk_present || !write_prot)
-        v |= 0x08;                            /* /WPRO alto senza disco o disco scrivibile
-                                                 (portage VGA32 : drive_set_write_protect) */
+    if (disk_present && !write_prot)
+        v |= 0x08;                            /* portage VGA32 : /WPRO haut seulement disque
+                                                 présent et écrivable ; lecteur vide = protégé
+                                                 (FLOPPY_SPEC.md D9, drive_set_write_protect) */
     if (track != 0) v |= 0x10;                /* /TK0 basso solo a traccia 0 */
     if (!(motor && disk_present))
         v |= 0x20;                            /* /RDY basso = pronto (motore+disco) */

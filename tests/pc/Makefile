@@ -59,7 +59,7 @@ test/testrom.bin: test/mkrom.py
 clean:
 	rm -rf a500 obj tjoy tdisk tcia tpaula tpaulairq tblitdiff test_blit.bin tdenise tdenisemodes test_denise.ppm test_denise_modes.ppm test/testrom.bin
 
-.PHONY: test testvideo testblit testboot testmfm clean
+.PHONY: test testvideo testblit testboot testmfm testregs testsysreset clean
 
 testvideo: a500
 	python3 test/mkrom_video.py test/testrom_video.bin
@@ -107,9 +107,11 @@ testcia:
 # Paula : WAV d'un scénario aléatoire figé, comparé à une empreinte de référence. Empreinte
 # d'origine (avance color clock par color clock) : 842c9f98f76d43720f661151d69afc31 ; refigée le
 # 2026-10-29 pour le mode manuel et la fin de mot à la coupure du DMA (le même scénario sans
-# AUDxDAT ni coupure reste identique octet pour octet à l'ancienne implémentation).
-# test_paula_irq_c : interruptions AUD0-3 (début de bloc, mode manuel, coupure).
-PAULA_REF_MD5 = 89a7fcf65391d68afa1a39b01d72b8a8
+# AUDxDAT ni coupure reste identique octet pour octet à l'ancienne implémentation). Refigée le
+# 2026-11-01 pour AUDxLEN = 0 -> 65 536 mots (89a7fcf65391d68afa1a39b01d72b8a8 avant ; le code
+# avec une écriture de LEN 0 lue comme 1 redonne cette empreinte).
+# test_paula_irq_c : interruptions AUD0-3 (début de bloc, mode manuel, coupure, LEN 0).
+PAULA_REF_MD5 = bc5f4fd0e79cfc87a5e7387d39887488
 testpaula:
 	g++ -O2 -I$(CORE) -o tpaulairq test/test_paula_irq_c.cpp $(CORE)/paula.cpp
 	./tpaulairq
@@ -139,6 +141,19 @@ testdenise:
 	./tdenisemodes
 	g++ -O2 -I$(CORE) -o tdenise test/test_denise_c.cpp $(CORE)/video.cpp
 	@test "$$(./tdenise)" = "$(DENISE_REF)" && echo "OK  denise : framebuffers identiques a la reference" || (echo "FAIL denise : framebuffers differents de la reference"; exit 1)
+
+# registres lus par la ROM et les logiciels (analyses KickSlopStart du 2026-11-01) : VHPOSR
+# horizontal, SERDATR/SERDAT (TBE), miroir chip RAM jusqu'à $1FFFFF, BZERO, POTGOR selon POTGO
+testregs: a500
+	python3 test/mkrom_regs.py test/testrom_regs.bin
+	./a500 test/testrom_regs.bin 2 --ramdump regs.ram > /dev/null
+	python3 test/check_regs.py regs.ram
+
+# /RESET système du reset clavier (Ctrl-Amiga-Amiga) : puces remises à zéro, RAM conservée
+testsysreset: a500
+	python3 test/mkrom_sysreset.py test/testrom_sysreset.bin
+	./a500 test/testrom_sysreset.bin 3 --sysreset 1 --ramdump sysreset.ram > /dev/null
+	python3 test/check_sysreset.py sysreset.ram
 
 testreset: a500
 	python3 test/mkrom_reset.py test/testrom_reset.bin

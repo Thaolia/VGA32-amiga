@@ -4,7 +4,8 @@ remote_input.py — Clavier + souris du PC -> Amiga émulé sur la TTGO VGA32, v
 
 Ouvre une petite fenêtre : un clic dedans CAPTURE clavier et souris, qui sont
 envoyés à la carte en trames binaires (décodées par src/hal/serial_proto.cpp).
-F12 libère la capture. Les logs série de la carte s'affichent dans ce terminal.
+F12 libère la capture, F11 envoie Ctrl-Amiga-Amiga (reset clavier : redémarrage à chaud, RAM
+conservée). Les logs série de la carte s'affichent dans ce terminal.
 
 Les touches sont lues par POSITION physique (scancode USB HID, indépendant du
 layout du PC) et traduites en rawcode Amiga ; c'est l'Amiga qui applique sa keymap.
@@ -80,6 +81,8 @@ HID_TO_AMIGA = {
     231: 0x67, # Super droit -> Amiga droite
 }
 HID_F12 = 69                 # libère la capture (pas de F12 sur Amiga)
+HID_F11 = 68                 # reset clavier Ctrl-Amiga-Amiga (pas de F11 sur Amiga ; Super droit souvent absent)
+RESET_KEYS = (0x63, 0x66, 0x67)   # Ctrl, Amiga gauche, Amiga droite
 
 
 def frame(ftype, payload):
@@ -157,6 +160,15 @@ class Remote:
             self.held.discard(raw)
         self.send(encode_key(raw, down))
 
+    def keyboard_reset(self):
+        """Ctrl-Amiga-Amiga enfoncés puis relâchés : la carte (kbd_amiga) émet $78 puis /RESET."""
+        for raw in RESET_KEYS:
+            if raw not in self.held:
+                self.send(encode_key(raw, True))
+        for raw in RESET_KEYS:
+            if raw not in self.held:
+                self.send(encode_key(raw, False))
+
     def motion(self, dx, dy):
         self.acc_x += dx * self.scale
         self.acc_y += dy * self.scale
@@ -230,7 +242,7 @@ def main():
 
     def draw():
         screen.fill((0, 85, 170) if captured else (40, 40, 40))
-        lines = (["CAPTURÉ — clavier et souris vont à l'Amiga", "F12 pour libérer"]
+        lines = (["CAPTURÉ — clavier et souris vont à l'Amiga", "F12 pour libérer, F11 = Ctrl-Amiga-Amiga"]
                  if captured else
                  ["Cliquer ici pour capturer clavier + souris", f"port {args.port}"])
         for i, t in enumerate(lines):
@@ -253,6 +265,8 @@ def main():
                     if ev.scancode == HID_F12:
                         set_capture(False)
                         draw()
+                    elif ev.scancode == HID_F11:
+                        remote.keyboard_reset()
                     else:
                         remote.key(ev.scancode, True)
                 elif ev.type == pygame.KEYUP:

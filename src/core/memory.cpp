@@ -67,11 +67,16 @@ int mem_load_rom(const char *path)
  * lieu d'une chaîne de comparaisons. À reconstruire à chaque changement d'overlay. La Fast RAM
  * (zorro_page), les CIA et les registres custom restent traités après, comme avant. */
 static const uint8_t *rd_page[256];
+/* Portage VGA32 : l'Agnus 8370/8371 décode 512 Ko de chip RAM, répétés jusqu'à $1FFFFF (une
+ * écriture en $80000 tombe en $0 : coldstart-hardware-v34.md §2, test de miroir du Kickstart). */
+#define CHIP_DECODE 0x200000u
 void mem_map_update(void)
 {
     for (int i = 0; i < 256; i++) rd_page[i] = nullptr;
-    for (int p = 0; p < (int)(CHIP_SIZE >> 16); p++)
-        rd_page[p] = ovl ? &kick_rom[(p << 16) & (ROM_SIZE - 1)] : &chip_ram[p << 16];
+    for (int p = 0; p < (int)(CHIP_DECODE >> 16); p++) {
+        uint32_t o = ((uint32_t)p << 16) & (CHIP_SIZE - 1);
+        rd_page[p] = ovl ? &kick_rom[o & (ROM_SIZE - 1)] : &chip_ram[o];
+    }
     if (slow_ram)
         for (int p = 0; p < (int)(SLOW_SIZE >> 16); p++) rd_page[(SLOW_BASE >> 16) + p] = &slow_ram[p << 16];
     for (int p = 0xF8; p < 0x100; p++) rd_page[p] = &kick_rom[(p << 16) & (ROM_SIZE - 1)];
@@ -95,9 +100,9 @@ void mem_reset(void)
  * reboot logiciel) : l'overlay ne revient qu'après elle, via mem_reset_poll(). */
 static int reset_deferred = 0;
 
-static void reset_line(void)
+static void reset_line(const char *src)
 {
-    logmsg("[RESET] instruction RESET (PC=%06X)\n", m68k_get_reg(NULL, M68K_REG_PPC));
+    logmsg("[RESET] %s (PC=%06X)\n", src, m68k_get_reg(NULL, M68K_REG_PPC));
     zorro_reset();
     cia_reset();
     drive_prb_write(0xFF);
@@ -105,11 +110,11 @@ static void reset_line(void)
 
 void mem_reset_instr(void)
 {
-    if (!ovl && (m68k_get_reg(NULL, M68K_REG_PC) & 0xFFFFFF) < CHIP_SIZE) {
+    if (!ovl && (m68k_get_reg(NULL, M68K_REG_PC) & 0xFFFFFF) < CHIP_DECODE) {
         reset_deferred = 1;
         m68k_end_timeslice();
     } else {
-        reset_line();
+        reset_line("instruction RESET");
     }
 }
 
@@ -118,7 +123,20 @@ void mem_reset_poll(void)
     if (!reset_deferred) return;
     reset_deferred = 0;
     m68k_execute(1);
-    reset_line();
+    reset_line("instruction RESET");
+}
+
+/* Portage VGA32 : /RESET système tiré par le clavier (Ctrl-Amiga-Amiga, coldstart-hardware-v34.md
+ * §7.1) : CPU et puces réinitialisés, RAM intacte -> la ROM prend le chemin chaud si ExecBase est
+ * valide (Capture, dernière alerte). Paula ne repasse que par paula_set_dma : paula_reset vide le
+ * ring audio que lit la tâche I2S de la carte. */
+void mem_system_reset(void)
+{
+    reset_deferred = 0;
+    reset_line("reset clavier : /RESET systeme");
+    custom_reset();
+    paula_set_dma(0);
+    m68k_pulse_reset();
 }
 
 /* log una-tantum per accessi a zone non mappate */
@@ -155,7 +173,7 @@ static uint8_t read8(uint32_t a)
 static void write8(uint32_t a, uint8_t v)
 {
     a &= 0xFFFFFF;
-    if (a < CHIP_SIZE) { if (!ovl) chip_ram[a] = v; return; }  /* scritture in overlay ignorate */
+    if (a < CHIP_DECODE) { if (!ovl) chip_ram[a & (CHIP_SIZE - 1)] = v; return; }  /* scritture in overlay ignorate */
     if (slow_ram && a >= SLOW_BASE && a < SLOW_BASE + SLOW_SIZE) { slow_ram[a - SLOW_BASE] = v; return; }
     { uint8_t *z = zorro_page[a >> 16]; if (z) { z[a & 0xFFFF] = v; return; } }
     if ((a & 0xFFF000) == 0xBFE000 && (a & 1)) { cia_write(&cia_a, (a >> 8) & 0xF, v); return; }
@@ -214,8 +232,8 @@ void MEMFN(m68k_write_memory_8)(unsigned int a, unsigned int v) { write8(a, (uin
 void MEMFN(m68k_write_memory_16)(unsigned int a, unsigned int v)
 {
     a &= 0xFFFFFE;
-    if (a < CHIP_SIZE) {
-        if (!ovl) wr_be16(&chip_ram[a], (uint16_t)v);
+    if (a < CHIP_DECODE) {
+        if (!ovl) wr_be16(&chip_ram[a & (CHIP_SIZE - 1)], (uint16_t)v);
         return;
     }
     {
@@ -249,7 +267,7 @@ MP_WRITE(MP_W8, 8)  MP_WRITE(MP_W16, 16)  MP_WRITE(MP_W32, 32)
 unsigned int m68k_read_disassembler_16(unsigned int a)
 {
     a &= 0xFFFFFE;
-    if (a < CHIP_SIZE && !ovl) return (unsigned)chip_ram[a] << 8 | chip_ram[a + 1];
+    if (a < CHIP_DECODE && !ovl) { a &= CHIP_SIZE - 1; return (unsigned)chip_ram[a] << 8 | chip_ram[a + 1]; }
     const uint8_t *p = &kick_rom[a & (ROM_SIZE - 1)];
     return (unsigned)p[0] << 8 | p[1];
 }

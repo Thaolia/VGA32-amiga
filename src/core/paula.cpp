@@ -19,13 +19,13 @@
 
 typedef struct {
     uint32_t lc;        /* AUDxLC: puntatore campione (Chip RAM) */
-    uint16_t len;       /* AUDxLEN: lunghezza in word */
+    uint32_t len;       /* AUDxLEN: lunghezza in word (portage VGA32 : 0 -> 65 536) */
     uint16_t per;       /* AUDxPER: periodo (colorclock per campione) */
     uint16_t vol;       /* AUDxVOL: volume 0-64 */
     uint16_t dat;       /* AUDxDAT: data register, utile per step successivi/software audio */
     /* stato DMA */
     uint32_t cur;       /* puntatore corrente */
-    uint16_t wordcnt;   /* word rimanenti nel loop */
+    uint32_t wordcnt;   /* word rimanenti nel loop */
     int      percnt;    /* contatore periodo */
     int8_t   sample;    /* campione corrente in uscita */
     int      hi;        /* quale byte della word (0=alto,1=basso) */
@@ -98,6 +98,7 @@ int paula_ring_pop(int16_t *l, int16_t *r)
 void paula_reset(void)
 {
     memset(ch, 0, sizeof ch);
+    for (int c = 0; c < 4; c++) ch[c].len = 65536;   /* portage VGA32 : AUDxLEN = 0 au reset */
     audio_on = 0; man_on = 0; irq_pend = 0; out_acc_fix = 0;
 #ifndef ARDUINO
     out_n = 0;
@@ -145,7 +146,7 @@ void paula_write(uint32_t off, uint16_t v)
     switch ((off - 0xA0) % 16) {
     case 0x0: ch[c].lc = (ch[c].lc & 0x0000FFFF) | ((uint32_t)v << 16); break; /* LCH */
     case 0x2: ch[c].lc = (ch[c].lc & 0xFFFF0000) | v; break;                   /* LCL */
-    case 0x4: ch[c].len = v ? v : 1; break;                                     /* LEN */
+    case 0x4: ch[c].len = v ? v : 65536; break;                                 /* LEN (0 = 65 536 mots, HRM) */
     case 0x6: ch[c].per = v ? v : 1; break;                                     /* PER */
     case 0x8: ch[c].vol = (v & 0x7F) > 64 ? 64 : (v & 0x7F); break;             /* VOL */
     case 0xA: ch[c].dat = v;                                                    /* DAT */

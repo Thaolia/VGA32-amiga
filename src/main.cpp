@@ -339,6 +339,12 @@ static void emu_task(void *arg)
         cia_tod_vsync();
         intreq_set(5);                     /* VBlank */
         kbd_amiga_step();                  /* emission serie clavier (stub Phase 0) */
+        if (kbd_amiga_reset_requested()) { /* Ctrl-Amiga-Amiga : /RESET systeme, RAM conservee */
+            mem_system_reset();
+#if VGA32_DEBUG
+            Serial.printf("[RESET] clavier PC=%06X\n", m68k_get_reg(NULL, M68K_REG_PC));
+#endif
+        }
         disk_switch_poll();                /* bouton IO36 : changement de disquette DF0 */
         video_vga_osd_tick();              /* fin de la surimpression du nom de disquette */
         PROF_MARK(P_POST);

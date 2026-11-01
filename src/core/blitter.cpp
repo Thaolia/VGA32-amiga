@@ -104,7 +104,7 @@ static void blit_area(uint16_t bltsize)
     uint16_t adat = custom_get(0x074), bdat = custom_get(0x072), cdat = custom_get(0x070);
     int dir = desc ? -1 : 1;
 
-    uint16_t aprev = 0, bprev = 0;
+    uint16_t aprev = 0, bprev = 0, dor = 0;
     for (int y = 0; y < h; y++) {
         int fc = fci;
         for (int x = 0; x < w; x++) {
@@ -133,6 +133,7 @@ static void blit_area(uint16_t bltsize)
             if (fill)           /* fill (significativo in DESC): bit da LSB a MSB */
                 dhold = fill_word(fill_mode, &fc, dhold);
 
+            dor |= dhold;       /* portage VGA32 : BZERO, calculé même sans canal D (collisions) */
             if (used) wr16(dpt, dhold);
             if (usea) apt += (uint32_t)(dir * 2);
             if (useb) bpt += (uint32_t)(dir * 2);
@@ -144,6 +145,7 @@ static void blit_area(uint16_t bltsize)
         if (usec) cpt += (uint32_t)(dir * cmod);
         if (used) dpt += (uint32_t)(dir * dmod);
     }
+    blit_zero = dor == 0;
     /* writeback dei puntatori (l'hardware li lascia al valore finale) */
     custom_set_latch(0x050, (uint16_t)(apt >> 16)); custom_set_latch(0x052, (uint16_t)apt);
     custom_set_latch(0x04C, (uint16_t)(bpt >> 16)); custom_set_latch(0x04E, (uint16_t)bpt);
@@ -175,6 +177,7 @@ static void blit_line(uint16_t bltsize)
     uint16_t bdat = custom_get(0x072);
     int16_t acc = (int16_t)custom_get(0x052);                /* BLTAPTL */
     int dot_row = 0;
+    uint16_t dor = 0;
 
     for (int i = 0; i < len; i++) {
         if (!sing || !dot_row) {
@@ -184,7 +187,9 @@ static void blit_line(uint16_t bltsize)
             uint16_t bhold = (uint16_t)((bdat >> bsh) | (bdat << (16 - bsh)));
             if (bsh == 0) bhold = bdat;
             uint16_t chold = rd16(cpt);
-            wr16(cpt, minterm(&mt, ahold, bhold, chold));
+            uint16_t d = minterm(&mt, ahold, bhold, chold);
+            dor |= d;
+            wr16(cpt, d);
             dot_row = 1;
         }
         bdat = (uint16_t)((bdat << 1) | (bdat >> 15));       /* texture avanza per pixel */
@@ -211,8 +216,10 @@ static void blit_line(uint16_t bltsize)
     custom_set_latch(0x048, (uint16_t)(cpt >> 16));
     custom_set_latch(0x04A, (uint16_t)cpt);
     custom_set_latch(0x052, (uint16_t)acc);
+    blit_zero = dor == 0;
 }
 
+int blit_zero = 0;
 int blit_irq_pending = 0;   /* completamento differito alla prossima scanline:
                                l'int sincrono verrebbe cancellato dall'ack del
                                server QBlit che arriva DOPO l'avvio del blit */

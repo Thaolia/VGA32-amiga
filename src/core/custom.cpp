@@ -112,20 +112,35 @@ uint16_t custom_read(uint32_t off)
 static uint16_t custom_read_inner(uint32_t off)
 {
     switch (off) {
-    case 0x002: return dmacon & 0x07FF;                 /* DMACONR (no BBUSY/BZERO in fase 0) */
+    case 0x002: return (dmacon & 0x07FF) | (blit_zero ? 0x2000 : 0); /* DMACONR (BBUSY : blit instantané) */
     case 0x004: return (lof ? 0x8000 : 0) | (uint16_t)((vpos >> 8) & 7); /* VPOSR: LOF |
                    V10-V8. Il server VERTB di graphics sceglie la copper list in base a
                    LOF: senza questo bit LoadView non installa mai la view (SHFCprList =
                    NULL). [Portage VGA32 : LOF alterne en entrelacé, custom_frame_start] */
-    case 0x006: return (uint16_t)(((vpos & 0xFF) << 8) | (hpos & 0xFF)); /* VHPOSR */
+    case 0x006: {                                       /* VHPOSR */
+        /* Portage VGA32 : position horizontale en color clocks d'après les cycles déjà exécutés
+         * dans la tranche de la ligne (2 cycles CPU par color clock, $00-$E2) ; figée à 0, elle
+         * bloquait les attentes horizontales et donnait une graine aléatoire constante. */
+        int h = m68k_cycles_run() >> 1;
+        hpos = h > 0xE2 ? 0xE2 : (h < 0 ? 0 : h);
+        return (uint16_t)(((vpos & 0xFF) << 8) | (hpos & 0xFF));
+    }
     case 0x010: return adkcon & 0x7FFF;                 /* ADKCONR */
     case 0x01A: return 0x0000;                          /* DSKBYTR: nessun dato disco */
     case 0x01C: return intena & 0x7FFF;                 /* INTENAR */
     case 0x01E: return intreq & 0x7FFF;                 /* INTREQR */
     case 0x00A: return input_joy0dat();                 /* JOY0DAT: contatori mouse */
     case 0x00C: return input_joy1dat();                 /* JOY1DAT: joystick porta 1 */
-    case 0x016: return input_rmb() ? 0xFB00 : 0xFF00;   /* POTGOR: bit10 = destro */
-    case 0x018: return 0x0000;                          /* SERDATR */
+    case 0x016: {                                       /* POTGOR: bit10 = destro */
+        /* Portage VGA32 : une broche programmée en sortie (OUTxx, bits 15/13/11/9 de POTGO) se
+         * relit à la valeur écrite (DATxx, bit juste en dessous) au lieu du bouton. */
+        uint16_t v = input_rmb() ? 0xFB00 : 0xFF00, potgo = regs[0x034 >> 1];
+        for (int b = 8; b <= 14; b += 2)
+            if (potgo & (2u << b)) v = (uint16_t)((v & ~(1u << b)) | (potgo & (1u << b)));
+        return v;
+    }
+    case 0x018: return 0x3800;  /* SERDATR : TBE, TSRE, RXD au repos (portage VGA32 : émission
+                                   instantanée, rien en réception) */
     case 0x088: copper_jmp(1); return 0;                /* strobe anche in lettura (HW reale) */
     case 0x08A: copper_jmp(2); return 0;
     }
@@ -159,6 +174,8 @@ void custom_write(uint32_t off, uint16_t v)
     case 0x09A: intena = setclr(intena, v); irq_update(); return;
     case 0x09C: intreq = setclr(intreq, v); cia_intreq_relevel(); irq_update(); return;
     case 0x09E: adkcon = setclr(adkcon, v); return;
+    case 0x030: regs[off >> 1] = v; intreq_set(0); return;  /* SERDAT : portage VGA32, octet émis
+                   aussitôt, tampon libre -> TBE (serial.device attend cette interruption) */
     case 0x02A: lof = (v >> 15) & 1; break;   /* VPOSW : LOF (portage VGA32) */
     case 0x088: if (jmp_wlog < 4) { logmsg("[CL ] COPJMP1 strobe%s\n", copper_writing ? " (COPPER)" : ""); jmp_wlog++; }
                 copper_jmp(1); return;
