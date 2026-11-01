@@ -114,6 +114,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 - Commentaires **en français** ; expliquer le POURQUOI non-évident, pas le QUOI.
 - `src/core/*` : copié de l'upstream, à **ne pas** réécrire. Seules retouches admises : hooks HAL.
   Les commentaires italiens de l'upstream restent tels quels.
+- Un `-D` de configuration Musashi se pose des DEUX côtés : `platformio.ini` et `M68KCFG` de
+  `tests/pc/Makefile` (sinon PC et carte n'exécutent plus le même CPU).
 - Musashi vit dans `third_party/musashi` (non modifié, configuré par `-D`) : compilé en **C** ;
   `m68k.h` s'inclut sous `extern "C"`. `a500.h` et le cœur sont du **C++** : inclure `a500.h` SANS
   `extern "C"`.
@@ -126,8 +128,8 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 ## Quality gates (avant de déclarer « fait »)
 
 1. Cœur modifié → `cd tests/pc && make a500 && make testvideo testblit testsprite testscroll
-   testjoy testaudio` (6 sentinelles synthétiques, sans ROM) au vert ; modif sous `#ifdef ARDUINO`
-   → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula` ;
+   testjoy testaudio testreset testlace testcopper` (9 sentinelles synthétiques, sans ROM) au vert ;
+   modif sous `#ifdef ARDUINO` → non couverte, le signaler. Lecteur (`disk.cpp`) → aussi `make testdisk` ; Paula → `make testpaula` ;
    blitter → `make testblitdiff` ; Denise (`video.cpp`) → `make testdenise` ; CIA → `make testcia`.
    `testboot`/`testmfm` exigent `kick34005.A500` /
    `wb13.adf` de l'utilisateur dans `tests/pc/` : les signaler comme non exécutés s'ils manquent.

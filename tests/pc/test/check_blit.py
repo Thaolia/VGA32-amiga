@@ -21,6 +21,8 @@ checks = [
     ("T6 y0", 0x7000, 0x8000), ("T6 y1", 0x7028, 0x8000), ("T6 y2", 0x7050, 0x4000),
     ("T6 y3", 0x7078, 0x4000), ("T6 y4", 0x70A0, 0x4000), ("T6 y5", 0x70C8, 0x2000),
     ("T6 y6", 0x70F0, 0x2000),
+    # T7: EFE sur $0810, du bit 0 vers le bit 15 : bit 4 ouvre (gardé), bit 11 ferme (perdu)
+    ("T7 fill exclusif", 0x4300, 0x07F0),
 ]
 ok = True
 for name, addr, want in checks:

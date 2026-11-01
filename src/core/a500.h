@@ -60,6 +60,8 @@ void    cia_a_kbd_shift_in(uint8_t sdr_value);  /* clavier Amiga -> SP CIA-A (po
 /* ---- chipset custom (0xDFF000) ---- */
 extern uint16_t intena, intreq, dmacon, adkcon;
 extern int      vpos, hpos;          /* beam counter PAL: 312 linee */
+extern int      lof;                 /* portage VGA32 : trame longue (VPOSR bit 15) */
+int      custom_frame_start(void);   /* portage VGA32 : bascule LOF, rend 313 ou 312 lignes */
 
 uint16_t custom_read (uint32_t off);          /* off = addr & 0x1FE */
 void     custom_write(uint32_t off, uint16_t v);
@@ -124,11 +126,15 @@ int     drive_side(void);
 int     drive_motor_on(void);
 int     drive_selected(void);
 const uint8_t *drive_adf(void);
+uint8_t *drive_adf_rw(void);            /* portage VGA32 : ADF écrivable (NULL si protégé/absent) */
+int     drive_write_protected(void);
+void    drive_set_write_protect(int on); /* portage VGA32 : 1 = /WPRO actif (défaut) */
 
 /* ---- disco: MFM + DMA (disk.cpp) ---- */
 void disk_dsklen_write(uint16_t v);
 extern int disk_irq_pending;         /* DSKBLK differito di una linea */
 void disk_line_tick(void);           /* rotation d'une ligne + impulsion d'index (portage VGA32) */
+void disk_track_invalidate(void);    /* portage VGA32 : piste MFM à reconstruire (disque changé) */
 #ifndef ARDUINO
 void disk_rotation_reset(void);      /* tests : rotation remise au mot 0 */
 #endif
@@ -158,6 +164,8 @@ typedef uint16_t __attribute__((may_alias)) amiga_u16_t;
 static inline void wr_be16(uint8_t *p, uint16_t v) { *(amiga_u16_t *)p = __builtin_bswap16(v); }
 
 void mem_map_update(void);   /* portage VGA32 : à appeler quand l'overlay ROM change */
+void mem_reset_instr(void);  /* portage VGA32 : callback Musashi de l'instruction RESET */
+void mem_reset_poll(void);   /* portage VGA32 : après m68k_execute, fin d'un RESET différé */
 
 /* ---- log & trace ---- */
 extern FILE *tracef;

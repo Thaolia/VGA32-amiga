@@ -11,6 +11,7 @@
  *   Lettura: riempie DSKPT con len word dal flusso traccia (rivoluzione
  *   ripetuta ciclicamente). A fine trasferimento: DSKBLK (INTREQ bit 1),
  *   differito alla scanline successiva (stessa lezione del blitter).
+ *   [Portage VGA32 : écriture DMA et reconversion en ADF, docs/FLOPPY_SPEC.md §E]
  */
 #include "a500.h"
 #include <string.h>
@@ -51,6 +52,9 @@ void disk_line_tick(void)
 #ifndef ARDUINO
 void disk_rotation_reset(void) { s_rot32 = 0; }
 #endif
+
+/* Portage VGA32 : piste MFM à reconstruire depuis l'ADF (disque changé ou piste réécrite) */
+void disk_track_invalidate(void) { rev_track = -1; }
 static inline uint16_t rev_word(uint32_t w) { return (uint16_t)(rev[2 * w] << 8 | rev[2 * w + 1]); }
 
 /* ---- encoder MFM a livello di bit ---- */
@@ -157,6 +161,48 @@ int disk_mfmdump(int track, const char *path)
 }
 #endif
 
+/* Portage VGA32 (docs/FLOPPY_SPEC.md §E4-E5) : décode les secteurs AmigaDOS de la piste MFM
+ * (circulaire, syncs alignés sur les mots comme les écrit le DMA) et, si les 11 sont valides,
+ * les recopie dans l'ADF (tout ou rien). Rend le masque des secteurs valides. */
+static uint32_t rev_long(uint32_t w) { return (uint32_t)rev_word(w % REV_WORDS) << 16 | rev_word((w + 1) % REV_WORDS); }
+
+static uint32_t mfm_decode(uint32_t odd, uint32_t even)
+{
+    return (odd & 0x55555555u) << 1 | (even & 0x55555555u);
+}
+
+static int track_commit(int track)
+{
+    uint32_t at[NSEC];                                    /* en-tête de chaque secteur valide */
+    int ok = 0;
+    for (uint32_t w = 0; w < REV_WORDS; w++) {
+        if (rev_word(w) != 0x4489 || rev_word((w + REV_WORDS - 1) % REV_WORDS) == 0x4489) continue;
+        uint32_t p = w;
+        for (int n = 0; n < 8 && rev_word(p % REV_WORDS) == 0x4489; n++) p++;
+        const uint32_t info = mfm_decode(rev_long(p), rev_long(p + 2));
+        const int t = (int)((info >> 16) & 0xFF), s = (int)((info >> 8) & 0xFF);
+        if (t != track || s >= NSEC) continue;
+        uint32_t hck = 0, dck = 0;
+        for (uint32_t k = 0; k < 10; k++) hck ^= rev_long(p + 2 * k) & 0x55555555u;   /* info + label */
+        for (uint32_t k = 0; k < 256; k++) dck ^= rev_long(p + 28 + 2 * k) & 0x55555555u;
+        if (hck != mfm_decode(rev_long(p + 20), rev_long(p + 22)) ||
+            dck != mfm_decode(rev_long(p + 24), rev_long(p + 26))) continue;
+        at[s] = p;
+        ok |= 1 << s;
+    }
+    uint8_t *adf = drive_adf_rw();
+    if (ok != (1 << NSEC) - 1 || !adf) return ok;
+    for (int s = 0; s < NSEC; s++) {                      /* données : 128 longs impairs puis pairs */
+        uint8_t *d = adf + ((uint32_t)track * NSEC + (uint32_t)s) * 512;
+        for (uint32_t k = 0; k < 128; k++) {
+            const uint32_t v = mfm_decode(rev_long(at[s] + 28 + 2 * k), rev_long(at[s] + 28 + 256 + 2 * k));
+            d[4 * k] = (uint8_t)(v >> 24); d[4 * k + 1] = (uint8_t)(v >> 16);
+            d[4 * k + 2] = (uint8_t)(v >> 8); d[4 * k + 3] = (uint8_t)v;
+        }
+    }
+    return ok;
+}
+
 /* chiamata dal latch DSKLEN in custom.cpp */
 void disk_dsklen_write(uint16_t v)
 {
@@ -167,8 +213,26 @@ void disk_dsklen_write(uint16_t v)
 
     int len = v & 0x3FFF;                                 /* in word       */
     uint32_t pt = (((uint32_t)custom_get(0x020) << 16) | custom_get(0x022)) & 0x7FFFE;
-    if (v & 0x4000) {                                     /* scrittura: WP */
-        logmsg("[DSK] scrittura richiesta ignorata (disco write-protected)\n");
+    if (v & 0x4000) {                                     /* scrittura */
+        /* Portage VGA32 (docs/FLOPPY_SPEC.md §E1-E3) : les mots de DSKPT remplacent ceux de la
+         * piste à partir du mot sous la tête (DMA instantané), puis DSKBLK. Disque absent,
+         * moteur arrêté ou protégé : la tête n'écrit rien, le DMA se termine quand même. */
+        if (!drive_adf() || !drive_motor_on() || drive_write_protected() || len <= 1) {
+            logmsg("[DSK] scrittura ignorata (%s)\n", len <= 1 ? "len <= 1" : "disco assente, motore fermo o protetto");
+            disk_irq_pending = 1;
+            return;
+        }
+        const int track = drive_track() * 2 + drive_side();
+        if (rev_track != track) build_revolution(track);
+        const uint32_t w = head_word();
+        for (int k = 0; k < len; k++) {
+            const uint32_t s = (w + (uint32_t)k) % REV_WORDS;
+            rev[2 * s]     = chip_ram[(pt + 2u * (uint32_t)k) & 0x7FFFF];
+            rev[2 * s + 1] = chip_ram[(pt + 2u * (uint32_t)k + 1u) & 0x7FFFF];
+        }
+        const int ok = track_commit(track);
+        logmsg("[DSK] scrittura traccia %d: %d word, settori validi %03X%s\n", track, len, ok,
+               ok == (1 << NSEC) - 1 ? " -> ADF" : " (ADF invariato)");
         disk_irq_pending = 1;
         return;
     }

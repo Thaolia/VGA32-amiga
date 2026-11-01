@@ -346,6 +346,63 @@ Carte (kickonly, KickStopStart, sans disque) : boot sans erreur, écran de boot 
 (30,0 avant), heap interne 136,7 Ko. Clavier, changement de disquette et index non vérifiés sur
 matériel (demandent un disque inséré et `remote_input.py`).
 
+## Améliorations issues des analyses KickSlopStart, 2e passe (2026-10-29)
+
+Source : les 12 analyses du 2026-10-29 de `../KickSlopStart/docs/analysis/` (coldstart, alert,
+audio.device, graphics display/blitter/area, layers, trackdisk-write, console/keymap, intuition).
+1. **Instruction RESET** (`coldstart-hardware-v34.md` §7.2) : `M68K_EMULATE_RESET` (platformio.ini
+   et `tests/pc/Makefile`) → `mem_reset_instr` (`memory.cpp`) : `zorro_reset`, `cia_reset` (DDR à 0,
+   overlay remis), lecteurs désélectionnés ; ni CPU ni RAM touchés (chemin chaud). Avant : RESET
+   sans effet, la ROM relisait $4 = ExecBase et sautait dans les données (gel au lieu du Guru, de
+   l'écran d'erreur ou du reboot). Depuis la chip RAM, l'overlay ne revient qu'après l'instruction
+   suivante (`mem_reset_poll`, file de préchargement : RESET / JMP (A0) du reboot logiciel).
+2. **Interruptions AUD0-3** (`audio-device-v34.md` §6, §8.1 ; HRM) : aucune n'existait. Levées au
+   début de chaque bloc DMA (allumage, puis chaque rechargement LC/LEN), au chargement de AUDxDAT
+   en mode manuel (DMA coupé : le mot est joué, puis repos) et après le mot en cours à la coupure du
+   DMA (attendu par audio.device après FLUSH/AbortIO). Le mode manuel est joué sur la cible aussi.
+   Scénario DMA seul : WAV identique octet pour octet à l'ancien code.
+3. **LOF et entrelacé** (`graphics-display-v34.md` §7.1) : `custom_frame_start()` alterne LOF avec
+   BPLCON0 LACE (trames de 313/312 lignes), VPOSW écrit LOF ; seule la trame longue est affichée.
+   Avant : LOF toujours 1, LoadView figeait en quittant un écran entrelacé.
+4. **Cache de lignes de la carte** : clé BPLCON0-2 + DIW horizontal, marge de défilement comparée,
+   ligne redessinée si un sprite y était au rendu précédent (traînée du pointeur), et jamais de
+   saut quand le copper écrit une couleur en cours de ligne.
+5. **Copper horizontal** : position en color clocks (4 par instruction, réveil +2 après WAIT,
+   227 par ligne, report sur la ligne suivante). Écritures de couleur dans la partie visible et de
+   registres de plans après la fin du fetch différées à leur position (`cop_ev`). Corrige aussi un
+   bug réel : `WAIT $FFDF` puis `WAIT $2C01` était satisfait dès la ligne 255, donc les plans
+   s'éteignaient à la ligne 255 au lieu de $12C (bas d'un écran PAL de 256 lignes noir, lignes
+   256-283 visibles sur le VGA).
+6. **Denise** : double playfield + PF2PRI (table de palette), HAM (lores), priorités sprites /
+   playfield BPLCON2 (PF2P en simple playfield), sprites attachés (COLOR16-31), fenêtre horizontale
+   DIW (COLOR00 hors fenêtre), défilement fin avec le mot lu avant la fenêtre (DDFSTRT avancé),
+   BPLCON1 en pixels lores (2 pixels hires par pas ; avant : 1). Chemin rapide inchangé pour le cas
+   courant ; index par pixel seulement pour HAM, sprites derrière le playfield ou couleur changée
+   en cours de ligne.
+7. **Écriture disque** (`trackdisk-write-v34.md`, `docs/FLOPPY_SPEC.md` §E) : DMA d'écriture dans
+   la piste MFM circulaire, décodage AmigaDOS (syncs alignés sur les mots), recopie dans l'ADF si
+   les 11 secteurs sont valides. `VGA32_DISK_WRITE` (défaut 1) : disque écrivable, **ADF en PSRAM
+   seulement** (perdu à l'extinction ou au changement de disquette, rien n'est écrit sur la SD).
+   Bug corrigé au passage : la piste MFM en cache n'était pas invalidée au changement de disquette
+   (relire la même piste rendait l'ancien disque).
+8. **Caps Lock** (`tools/remote_input.py`) : `0x62` à l'allumage, `0xE2` à l'extinction, rien au
+   relâchement physique, comme le clavier A500 (avant : Maj seulement touche tenue).
+9. **Blitter, remplissage exclusif** (`graphics-area-v34.md` §4.4) : sortie = état après bascule ;
+   le bord qui ouvre le span était perdu. Scénario sans EFE identique à l'ancien code.
+Tests : `make testreset`, `testlace`, `testcopper` (nouveaux), `testpaula` (+ `test_paula_irq_c`),
+`testdenise` (+ `test_denise_modes_c`), `testdisk` (écriture, changement de disque), `testblit`
+(T7) ; chacun échoue sur l'ancien code (mutant du report RESET détecté aussi). Empreintes refigées
+avec preuve (variante sans le comportement changé identique à l'ancien code) : `testpaula`,
+`testdenise`, `testblitdiff`.
+Carte (`ttgo-vga32`, ROM KickStopStart + WB embarqué, 120 s, mêmes conditions avant/après) :
+journal de boot identique (seule la mention « write-protected » disparaît, aucune écriture disque
+au boot), **21,5 ms/trame** de calcul en régime établi (22,8 avant), heap interne 133,2 Ko (136,7
+avant : clé du cache et file copper), PSRAM libre −7,5 Ko (marge du cache de lignes).
+`ttgo-vga32-stress` : CRC de la RAM Amiga identiques sur deux boots (trames 500 à 3500), 0 erreur
+de stress PSRAM. **Non vérifié sur matériel** : affichage (moniteur VGA), son par audio.device,
+Guru/reboot, sauvegarde sur disquette, Caps Lock. Bureau WB 1.3 de référence (8,5 ms, KS 1.3
+officielle) non re-mesuré.
+
 ## Optimisations Denise + limiteur 50 Hz (2026-10-07)
 
 Mesures sur la carte, firmware normal (Workbench embarqué, sans SD), temps réel horodaté côté PC

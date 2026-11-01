@@ -29,6 +29,7 @@ static uint8_t *adf = nullptr;   // 901KB in PSRAM (allocato da drive_set_adf)
 static uint8_t adf[ADF_SIZE];
 #endif
 static int disk_present = 0;
+static int write_prot = 1; /* portage VGA32 : /WPRO, disque protégé (drive_set_write_protect) */
 static int chng_latch = 1; /* asserito (/CHNG basso) finche' uno step
                               a disco INSERITO non lo azzera (HRM) */
 
@@ -44,7 +45,8 @@ int drive_set_adf(const uint8_t *data, uint32_t len)
     memcpy(adf, data, ADF_SIZE);
     disk_present = 1;
     chng_latch = 1;
-    logmsg("[DRV] disco montato in PSRAM (901120 byte, write-protected)\n");
+    disk_track_invalidate();
+    logmsg("[DRV] disco montato in PSRAM (901120 byte%s)\n", write_prot ? ", write-protected" : "");
     return 0;
 }
 
@@ -59,7 +61,8 @@ void drive_mount_ready(void)
 {
     disk_present = 1;
     chng_latch = 1;
-    logmsg("[DRV] disco montato in PSRAM (901120 byte, write-protected)\n");
+    disk_track_invalidate();   /* portage VGA32 : sinon la piste MFM de l'ancien disque resterait lue */
+    logmsg("[DRV] disco montato in PSRAM (901120 byte%s)\n", write_prot ? ", write-protected" : "");
 }
 /* portage VGA32 : éjection (changement de disquette par bouton). Le buffer ADF
  * peut ensuite être réécrit hors de l'émulateur : drive_adf() rend NULL tant que
@@ -69,6 +72,7 @@ void drive_eject(void)
 {
     disk_present = 0;
     chng_latch = 1;
+    disk_track_invalidate();
     logmsg("[DRV] disco espulso\n");
 }
 #endif
@@ -86,7 +90,8 @@ int drive_insert_adf(const char *path)
     }
     disk_present = 1;
     chng_latch = 1;
-    logmsg("[DRV] disco inserito: %s (901120 byte, write-protected)\n", path);
+    disk_track_invalidate();
+    logmsg("[DRV] disco inserito: %s (901120 byte)\n", path);
     return 0;
 }
 #endif
@@ -95,6 +100,10 @@ int  drive_track(void)    { return track; }
 int  drive_side(void)     { return side; }
 int  drive_motor_on(void) { return motor && disk_present; }
 const uint8_t *drive_adf(void) { return disk_present ? adf : NULL; }
+/* Portage VGA32 : écriture disque (docs/FLOPPY_SPEC.md §E), image en mémoire seulement */
+uint8_t *drive_adf_rw(void) { return disk_present && !write_prot ? adf : NULL; }
+int  drive_write_protected(void) { return write_prot; }
+void drive_set_write_protect(int on) { write_prot = on ? 1 : 0; }
 
 #define DRVLOG(...) do { if (evlog < 200) { logmsg(__VA_ARGS__); evlog++; } } while (0)
 
@@ -136,9 +145,9 @@ uint8_t drive_pra_bits(void)
     if (!sel) return 0x3C;                    /* non selezionato: pull-up */
     uint8_t v = 0;
     if (!chng_latch) v |= 0x04;               /* /CHNG alto = latch azzerato (disco ok) */
-    if (!(disk_present))
-        v |= 0x08;                            /* /WPRO alto solo senza disco; l'ADF
-                                                 inserito e' write-protected (basso) */
+    if (!disk_present || !write_prot)
+        v |= 0x08;                            /* /WPRO alto senza disco o disco scrivibile
+                                                 (portage VGA32 : drive_set_write_protect) */
     if (track != 0) v |= 0x10;                /* /TK0 basso solo a traccia 0 */
     if (!(motor && disk_present))
         v |= 0x20;                            /* /RDY basso = pronto (motore+disco) */

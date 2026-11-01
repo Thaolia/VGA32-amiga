@@ -29,10 +29,10 @@ d'implémentation de WinUAE, libre ; **[?]** = incertain.
 | B9, B10, B3 | Abandon (bit 15 à 0), mise à jour de longueur, len = 0, DMA suspendu sans DMAEN/DSKEN | à faire |
 | C | DSKBYTR complet | à faire |
 | D | Délai /RDY, moteur latché sur /SEL, /CHNG, DF1-3 absents | partiel (voir `drive.cpp`) |
-| E | Écriture DMA + décodage AmigaDOS + validation tout ou rien | à faire (disque protégé aujourd'hui) |
+| E | Écriture DMA + décodage AmigaDOS + validation tout ou rien | **fait** (2026-10-29) : syncs cherchés alignés sur les mots, sans mot 0x5555 ajouté [WU], ADF en PSRAM seulement (`VGA32_DISK_WRITE`) |
 
 Tests : `tests/pc`, `make testdisk` (stubs, sans ROM ni ADF) : position de rotation, WORDSYNC,
-sync absent.
+sync absent, écriture d'une piste (tout ou rien, disque protégé), changement de disque.
 
 ## A. Timing du flux disque
 

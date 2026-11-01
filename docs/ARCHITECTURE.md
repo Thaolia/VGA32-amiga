@@ -5,7 +5,7 @@
 ```
           ┌──────────────────────── cœur calme (quietCore) ───────────────────────┐
           │  emu_task (src/main.cpp)                                               │
-          │    boucle trame PAL : 312 lignes × 455 cycles                          │
+          │    boucle trame PAL : 313 (312) lignes × 455 cycles                    │
           │      copper_run_line → denise_render_line → m68k_execute               │
           │                     → paula_step → cia_tick → cia_tod_hsync            │
           │                                                                        │
@@ -33,7 +33,16 @@
 Copié de l'upstream (variantes `esp32/`). Chipset OCS complet, portable (compile aussi sur PC).
 API dans `a500.h`. Globals RAM (`chip_ram`/`slow_ram`/`kick_rom`) **définis** dans `memory.cpp`,
 alloués en PSRAM par `main.cpp`. Hook vidéo : `denise_line_cb`. Interruptions : `irq_update` →
-`m68k_set_irq` (pas de callback INT_ACK, cf. `m68kconf.h` 68000-only).
+`m68k_set_irq` (pas de callback INT_ACK, cf. `m68kconf.h` 68000-only) ; sources : VBlank,
+blitter et DSKBLK différés d'une ligne, CIA (PORTS/EXTER), Paula AUD0-3 (fin de `paula_step`).
+Instruction RESET : callback `mem_reset_instr` (`M68K_EMULATE_RESET`, posé dans platformio.ini et
+`tests/pc/Makefile`) → CIA, overlay et Zorro remis à zéro, RAM conservée.
+Copper (`video.cpp`) : position horizontale suivie en color clocks ; les écritures de couleur en
+cours de ligne (et de registres de plans après le fetch) sont différées (`cop_ev`) et appliquées
+par Denise à leur position. Denise : simple/double playfield, EHB, HAM, priorités BPLCON2, sprites
+attachés, fenêtre DIW verticale et horizontale ; en entrelacé, seule la trame longue est affichée.
+Lecteur (`disk.cpp`) : lecture et écriture DMA sur une piste MFM circulaire ; une piste écrite aux
+11 secteurs valides est recopiée dans l'ADF en PSRAM (`VGA32_DISK_WRITE`, pas de persistance SD).
 
 ### CPU — `third_party/musashi/`
 Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PSRAM (voir
@@ -82,10 +91,12 @@ cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kicksta
 ## Flux d'une trame
 
 1. `emu_task` : `input_ps2_poll` → `input_frame` → `copper_vblank` → `sprite_vblank`.
-2. Pour chaque ligne (0..312, trame longue PAL) : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
-   (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne) → `m68k_execute(455)` →
-   `paula_step` (colorclock) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick` (rotation,
-   index /FLG) → `cia_tod_hsync`.
+2. `custom_frame_start()` (bascule LOF si LACE) donne le nombre de lignes : 313 (trame longue) ou
+   312 (courte). Pour chaque ligne : IRQ blit/disk différées → `copper_run_line` → `denise_render_line`
+   (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne ; écritures copper différées
+   appliquées) → `m68k_execute(455)` → `mem_reset_poll` (RESET depuis la chip RAM) →
+   `paula_step` (colorclock, IRQ AUD0-3) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick`
+   (rotation, index /FLG) → `cia_tod_hsync`.
 3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` →
    `disk_switch_poll` → `video_vga_osd_tick` → log `=== frame` (`VGA32_DEBUG`, temps de calcul,
    attente exclue) → `frame_end_wait` : avec `VGA32_FPS_LIMIT` (défaut 1), attente de l'échéance
@@ -101,8 +112,10 @@ copie en ligne privée : https://claude.ai/artifact/JcpjhFbaR1AqgrUXTcLFZ1).
 
 ## Dual-target / régression
 
-`tests/pc/` est le *ground truth* : rendu PPM/BMP/WAV, 8 sentinelles (6 synthétiques + `testboot`/`testmfm`
-qui exigent Kickstart/ADF). Il compile **directement** `src/core/` et `third_party/musashi/` (source
+`tests/pc/` est le *ground truth* : rendu PPM/BMP/WAV, sentinelles synthétiques par ROM (`testvideo`,
+`testblit`, `testsprite`, `testscroll`, `testaudio`, `testreset`, `testlace`, `testcopper`), tests de
+modules à stubs (`testjoy`, `testdisk`, `testcia`, `testpaula`, `testblitdiff`, `testdenise`), et
+`testboot`/`testmfm` qui exigent Kickstart/ADF. Il compile **directement** `src/core/` et `third_party/musashi/` (source
 unique) ; seuls `tests/pc/src/main.cpp` (boucle PC, sorties PPM/WAV) et `hook_decl.h` lui sont propres.
 Le rendu de ligne (`denise_render_line`) exécute la même boucle bitplanes/scroll/sprites sur PC et sur
 la carte ; le PC double ensuite les pixels lores dans `fb[]`. Non couvert : tout bloc `#ifdef ARDUINO`.

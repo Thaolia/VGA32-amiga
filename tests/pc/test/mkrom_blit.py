@@ -4,6 +4,7 @@
   T2 shift ASH=4 con riporto tra word (LF=F0), 1 riga x 3 word
   T3 minterm EA (D = A|C con B=FFFF) con FWM/LWM parziali
   T4 linea 45° (8 px) + T5 linea bassa dx=6,dy=2 (7 px), raster 40 byte
+  T7 remplissage exclusif (EFE) d'un mot
 Verifica con test/check_blit.py (implementazione indipendente in Python)."""
 import struct, sys
 
@@ -75,6 +76,16 @@ code += mw(B+0x052, 0xFFFC)                          # BLTAPTL = 4*2-2*6 = -4
 code += mw(B+0x064, 0xFFF0)                          # AMOD = 4*(2-6) = -16
 code += mw(B+0x062, 0x0008)                          # BMOD = 4*2 = 8
 code += mw(B+0x058, (7 << 6) | 2)
+
+# T7: remplissage exclusif (EFE, DESC) d'un mot $0810 : bord droit gardé, bord gauche perdu
+code += mw(0x3100, 0x0810)
+code += mw(B+0x040, 0x09F0)  # USEA|USED, LF=F0 (D=A)
+code += mw(B+0x042, 0x0012)  # EFE | DESC
+code += mw(B+0x044, 0xFFFF) + mw(B+0x046, 0xFFFF)
+code += mw(B+0x050, 0x0000) + mw(B+0x052, 0x3100)
+code += mw(B+0x054, 0x0000) + mw(B+0x056, 0x4300)
+code += mw(B+0x064, 0x0000) + mw(B+0x066, 0x0000)
+code += mw(B+0x058, (1 << 6) | 1)
 
 code += bytes.fromhex("60FE")
 

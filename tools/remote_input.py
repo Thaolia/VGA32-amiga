@@ -24,6 +24,7 @@ import threading
 import time
 
 SYNC = 0xA5
+AMIGA_CAPS = 0x62            # Caps Lock : le clavier A500 envoie 0x62 à l'allumage de la LED, 0xE2 à l'extinction
 MOUSE_PERIOD = 0.02          # envoi souris à 50 Hz max (la carte tourne à 15-40 fps)
 STEP = 127                   # |delta| max par trame (int8)
 
@@ -126,6 +127,7 @@ class Remote:
         self.ser = ser
         self.scale = scale
         self.held = set()        # rawcodes enfoncés (à relâcher si on perd la capture)
+        self.caps = False        # LED Caps Lock du clavier Amiga émulé (bascule à chaque appui)
         self.lmb = self.rmb = False
         self.acc_x = self.acc_y = 0.0
         self.last_mouse = 0.0
@@ -139,6 +141,11 @@ class Remote:
     def key(self, scancode, down):
         raw = HID_TO_AMIGA.get(scancode)
         if raw is None:
+            return
+        if raw == AMIGA_CAPS:    # rien au relâchement physique : input.device tient Maj tant que la LED est allumée
+            if down:
+                self.caps = not self.caps
+                self.send(encode_key(raw, self.caps))
             return
         if down:
             if raw in self.held:     # Ctrl G/D partagent 0x63 : pas de double appui

@@ -69,9 +69,15 @@
  * du clavier PS/2 (les deux alimentent kbd_amiga). 0 pour désactiver. */
 #define VGA32_SERIAL_KBD   1
 
+/* Disquette écrivable (/WPRO inactif) : les pistes écrites par le DMA modifient l'ADF en PSRAM
+ * seulement (perdu à l'extinction ou au changement de disquette, rien n'est écrit sur la SD).
+ * 0 = disque protégé en écriture, comme avant. */
+#ifndef VGA32_DISK_WRITE
+#define VGA32_DISK_WRITE   1
+#endif
+
 /* ---- Timing trame PAL (repris des #define de l'ancien a500_esp32.ino) ----
- * 1 trame PAL = 313 lignes de 455 cycles CPU. Non présents dans a500.h. */
-#define LINES_PAL   313   /* trame longue PAL (LOF=1, non entrelacé) : lignes 0..312 */
+ * 1 trame PAL = 313 lignes (312 en trame courte : custom_frame_start) de 455 cycles CPU. */
 #define CYC_LINE    455
 
 /* ---- Ordonnancement ----

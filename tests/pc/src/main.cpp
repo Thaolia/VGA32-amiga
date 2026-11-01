@@ -18,7 +18,6 @@ extern "C" {
 void cia_tod_hsync(void);
 void cia_tod_vsync(void);
 
-#define LINES_PAL   313   /* trame longue PAL (LOF=1, non entrelacé) : lignes 0..312 */
 #define CYC_LINE    455
 
 int cur_frame = 0;
@@ -88,6 +87,7 @@ int main(int argc, char **argv)
             if (drive_insert_adf(argv[++i]) < 0) return 1;
         }
         else if (!strcmp(argv[i], "--benchmark")) bench = 1;
+        else if (!strcmp(argv[i], "--rw")) drive_set_write_protect(0);   /* disque écrivable */
         else if (!strcmp(argv[i], "--wav") && i + 1 < argc) {
             wav_path = argv[++i];
         }
@@ -129,6 +129,7 @@ int main(int argc, char **argv)
     m68k_init();
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
     m68k_set_int_ack_callback(irq_ack);
+    m68k_set_reset_instr_callback(mem_reset_instr);
 
     if (dasm_n > 0) {   /* solo disassembly statico dalla ROM, nessuna esecuzione */
         char buf[128];
@@ -173,7 +174,8 @@ int main(int argc, char **argv)
         input_frame(f);
         copper_vblank();                 /* ricarica COP1LC a inizio frame */
         sprite_vblank();                 /* i canali sprite si riavviano */
-        for (int line = 0; line < LINES_PAL; line++) {
+        const int nlines = custom_frame_start();
+        for (int line = 0; line < nlines; line++) {
             vpos = line;
             if (blit_irq_pending) { blit_irq_pending = 0; intreq_set(6); }
             if (disk_irq_pending) { disk_irq_pending = 0; intreq_set(1); }
@@ -188,6 +190,7 @@ int main(int argc, char **argv)
                 t_render += (tb.tv_sec-ta.tv_sec)*1000000000LL + (tb.tv_nsec-ta.tv_nsec); ta = tb; }
 
             m68k_execute(CYC_LINE);
+            mem_reset_poll();
             if (bench) { clock_gettime(CLOCK_MONOTONIC, &tb);
                 t_cpu += (tb.tv_sec-ta.tv_sec)*1000000000LL + (tb.tv_nsec-ta.tv_nsec); ta = tb; }
 

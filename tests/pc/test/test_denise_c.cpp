@@ -11,6 +11,7 @@
 uint8_t chip_ram[CHIP_SIZE] __attribute__((aligned(4)));
 uint16_t intena, intreq, dmacon, adkcon;
 int vpos, hpos, cur_frame;
+int lof = 1;
 uint32_t bpl_pt[6];
 static uint16_t s_regs[0x100];
 uint16_t custom_get(uint32_t off) { return s_regs[off >> 1]; }

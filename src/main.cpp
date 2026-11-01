@@ -287,6 +287,7 @@ static void emu_task(void *arg)
     kbd_amiga_init();
     m68k_init();
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);
+    m68k_set_reset_instr_callback(mem_reset_instr);
     m68k_pulse_reset();
     Serial.printf("[RESET] PC=%06X (attendu FC00D2)\n",
                   m68k_get_reg(NULL, M68K_REG_PC));
@@ -309,7 +310,8 @@ static void emu_task(void *arg)
         sprite_vblank();
         PROF_MARK(P_FRAME);
 
-        for (int line = 0; line < LINES_PAL; line++) {
+        const int nlines = custom_frame_start();   /* 313 lignes, 312 en trame courte */
+        for (int line = 0; line < nlines; line++) {
             vpos = line;
             if (blit_irq_pending) { blit_irq_pending = 0; intreq_set(6); }
             if (disk_irq_pending) { disk_irq_pending = 0; intreq_set(1); }
@@ -319,6 +321,7 @@ static void emu_task(void *arg)
             denise_render_line();          /* -> denise_line_cb (video_vga) */
             PROF_MARK(P_DENISE);
             m68k_execute(CYC_LINE);
+            mem_reset_poll();
             PROF_MARK(P_CPU);
 
             /* Paula avance en colorclock (~3.546 MHz), pas en cycles CPU :
@@ -439,6 +442,7 @@ void setup(void)
 
     /* 2. Kickstart + ADF (depuis headers embarques) */
     if (!load_kickstart()) { Serial.println("STOP: pas de Kickstart."); return; }
+    drive_set_write_protect(!VGA32_DISK_WRITE);
     int boot_idx;
     if (!load_workbench(&boot_idx))
         Serial.println("ATTENTION: pas de floppy, boot bloque a l'invite disque.");

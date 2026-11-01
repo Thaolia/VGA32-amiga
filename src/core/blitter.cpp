@@ -50,7 +50,8 @@ static inline uint16_t minterm(const minterm_t *t, uint16_t a, uint16_t b, uint1
 
 /* Portage VGA32 : remplissage (fill) par table, 8 bits à la fois au lieu de 16 itérations par
  * mot. Entrée : mode (0 = inclusif IFE, 1 = exclusif EFE), état de remplissage, octet ; sortie :
- * octet rempli | état final << 8. Règle bit à bit inchangée (du LSB vers le MSB). */
+ * octet rempli | état final << 8. Du LSB vers le MSB ; en exclusif la sortie est l'état après
+ * bascule (HRM) : le bord qui ouvre le span est gardé, celui qui le ferme est perdu. */
 static uint16_t fill_tab[2][2][256];
 static void fill_tab_init(void)
 {
@@ -62,7 +63,7 @@ static void fill_tab_init(void)
                 int fc = fc0, out = 0;
                 for (int i = 0; i < 8; i++) {
                     int bit = (v >> i) & 1;
-                    int ob = mode == 0 ? (bit | fc) : (fc & ~bit);
+                    int ob = mode == 0 ? (bit | fc) : (fc ^ bit);
                     out |= ob << i;
                     fc ^= bit;
                 }

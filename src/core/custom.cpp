@@ -14,6 +14,7 @@ extern "C" {
 
 uint16_t intena, intreq, dmacon, adkcon;
 int vpos, hpos;
+int lof = 1;                      /* portage VGA32 : bit LOF de VPOSR (trame longue) */
 uint32_t bpl_pt[6];               /* puntatori bitplane live (incrementati dal fetch) */
 
 static uint16_t regs[0x100];      /* latch generico, indice = off>>1 */
@@ -81,8 +82,18 @@ void custom_reset(void)
 {
     intena = intreq = dmacon = adkcon = 0;
     vpos = hpos = 0;
+    lof = 1;
     memset(regs, 0, sizeof regs);
     memset(wlogged, 0, sizeof wlogged);
+}
+
+/* Portage VGA32 : début de trame. Avec BPLCON0 LACE, Agnus alterne trames longues (LOF=1,
+ * 313 lignes) et courtes (LOF=0, 312 lignes) ; sans LACE, LOF garde sa valeur (VPOSW l'écrit).
+ * LoadView attend une trame courte en quittant un écran entrelacé. Retourne le nombre de lignes. */
+int custom_frame_start(void)
+{
+    if (regs[0x100 >> 1] & 0x0004) lof ^= 1;
+    return lof ? 313 : 312;
 }
 
 static uint16_t custom_read_inner(uint32_t off);
@@ -102,10 +113,10 @@ static uint16_t custom_read_inner(uint32_t off)
 {
     switch (off) {
     case 0x002: return dmacon & 0x07FF;                 /* DMACONR (no BBUSY/BZERO in fase 0) */
-    case 0x004: return 0x8000 | (uint16_t)((vpos >> 8) & 7); /* VPOSR: LOF=1 (PAL non
-                   interlacciato = sempre long frame) | V10-V8. Il server VERTB di
-                   graphics sceglie la copper list in base a LOF: senza questo bit
-                   LoadView non installa mai la view (SHFCprList = NULL). */
+    case 0x004: return (lof ? 0x8000 : 0) | (uint16_t)((vpos >> 8) & 7); /* VPOSR: LOF |
+                   V10-V8. Il server VERTB di graphics sceglie la copper list in base a
+                   LOF: senza questo bit LoadView non installa mai la view (SHFCprList =
+                   NULL). [Portage VGA32 : LOF alterne en entrelacé, custom_frame_start] */
     case 0x006: return (uint16_t)(((vpos & 0xFF) << 8) | (hpos & 0xFF)); /* VHPOSR */
     case 0x010: return adkcon & 0x7FFF;                 /* ADKCONR */
     case 0x01A: return 0x0000;                          /* DSKBYTR: nessun dato disco */
@@ -148,6 +159,7 @@ void custom_write(uint32_t off, uint16_t v)
     case 0x09A: intena = setclr(intena, v); irq_update(); return;
     case 0x09C: intreq = setclr(intreq, v); cia_intreq_relevel(); irq_update(); return;
     case 0x09E: adkcon = setclr(adkcon, v); return;
+    case 0x02A: lof = (v >> 15) & 1; break;   /* VPOSW : LOF (portage VGA32) */
     case 0x088: if (jmp_wlog < 4) { logmsg("[CL ] COPJMP1 strobe%s\n", copper_writing ? " (COPPER)" : ""); jmp_wlog++; }
                 copper_jmp(1); return;
     case 0x08A: if (jmp_wlog < 4) { logmsg("[CL ] COPJMP2 strobe%s\n", copper_writing ? " (COPPER)" : ""); jmp_wlog++; }

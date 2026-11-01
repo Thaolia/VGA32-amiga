@@ -29,10 +29,14 @@ typedef struct {
     int      percnt;    /* contatore periodo */
     int8_t   sample;    /* campione corrente in uscita */
     int      hi;        /* quale byte della word (0=alto,1=basso) */
+    uint16_t outw;      /* portage VGA32 : mot joué en mode manuel (DMA coupé) */
+    int      dat_full;  /* portage VGA32 : AUDxDAT chargé, pas encore joué */
 } audchan_t;
 
 static audchan_t ch[4];
 static int audio_on = 0;   /* maschera DMA canali (da DMACON bit 0-3) */
+static int man_on = 0;     /* portage VGA32 : canaux jouant un mot en mode manuel */
+static int irq_pend = 0;   /* portage VGA32 : INTREQ AUD0-3 à lever en fin de paula_step */
 
 /* accumulatore per il resampling a OUT_RATE */
 /* accumulatore resampling a punto fisso 16.16 (no float nel loop) */
@@ -94,13 +98,43 @@ int paula_ring_pop(int16_t *l, int16_t *r)
 void paula_reset(void)
 {
     memset(ch, 0, sizeof ch);
-    audio_on = 0; out_acc_fix = 0;
+    audio_on = 0; man_on = 0; irq_pend = 0; out_acc_fix = 0;
 #ifndef ARDUINO
     out_n = 0;
 #else
     ring_alloc_if_needed();
     ring_wr = ring_rd = 0;
 #endif
+}
+
+/* Portage VGA32 : mode manuel (HRM, automate audio). DMA coupé, le mot de AUDxDAT passe dans
+ * le tampon de sortie, ce qui lève l'interruption du canal (demande du mot suivant) ; il est joué
+ * octet fort puis octet faible, PER color clocks chacun. Sans nouveau AUDxDAT, le canal se met
+ * au repos. C'est ainsi qu'audio.device démarre un canal (période 1, puis DMA allumé par le
+ * handler d'interruption). */
+static void man_load(int c, uint16_t w)
+{
+    ch[c].outw = w;
+    ch[c].dat_full = 0;
+    ch[c].sample = (int8_t)(w >> 8);
+    ch[c].hi = 1;
+    ch[c].percnt = ch[c].per;
+    man_on |= 1 << c;
+    irq_pend |= 1 << c;
+}
+
+static void man_next(int c)
+{
+    ch[c].percnt = ch[c].per;
+    if (ch[c].hi) { ch[c].sample = (int8_t)(ch[c].outw & 0xFF); ch[c].hi = 0; }
+    else if (ch[c].dat_full) man_load(c, ch[c].dat);
+    else man_on &= ~(1 << c);
+}
+
+static uint16_t chip_word(uint32_t a)
+{
+    a &= 0x7FFFE;
+    return ((uint16_t)chip_ram[a] << 8) | chip_ram[a + 1];
 }
 
 /* scrittura registri audio (offset custom 0xA0-0xDF) */
@@ -114,7 +148,11 @@ void paula_write(uint32_t off, uint16_t v)
     case 0x4: ch[c].len = v ? v : 1; break;                                     /* LEN */
     case 0x6: ch[c].per = v ? v : 1; break;                                     /* PER */
     case 0x8: ch[c].vol = (v & 0x7F) > 64 ? 64 : (v & 0x7F); break;             /* VOL */
-    case 0xA: ch[c].dat = v; ch[c].sample = (int8_t)(v >> 8); ch[c].hi = 1; break; /* DAT, base software audio */
+    case 0xA: ch[c].dat = v;                                                    /* DAT */
+              if ((audio_on >> c) & 1) { ch[c].sample = (int8_t)(v >> 8); ch[c].hi = 1; }
+              else if ((man_on >> c) & 1) ch[c].dat_full = 1;
+              else man_load(c, v);
+              break;
     }
 }
 
@@ -130,6 +168,20 @@ void paula_set_dma(uint16_t dmacon)
             ch[c].wordcnt = ch[c].len;
             ch[c].percnt = ch[c].per;
             ch[c].hi = 0;
+            man_on &= ~(1 << c);
+            irq_pend |= 1 << c;               /* portage VGA32 : LC/LEN copiés = début de bloc */
+        } else if (!on && ((audio_on >> c) & 1)) {
+            /* Portage VGA32 : DMA coupé en cours de bloc. Le canal finit le mot en cours puis
+             * joue le mot déjà lu par le DMA en mode manuel (interruption), puis se met au repos :
+             * audio.device attend cette interruption après FLUSH/AbortIO avec une suite armée. */
+            if (ch[c].hi) {
+                ch[c].outw = chip_word(ch[c].cur);
+                ch[c].dat = chip_word(ch[c].wordcnt > 1 ? ch[c].cur + 2 : ch[c].lc);
+            } else {
+                ch[c].dat = chip_word(ch[c].cur);
+            }
+            ch[c].dat_full = 1;
+            man_on |= 1 << c;
         }
     }
     audio_on = newmask;
@@ -145,6 +197,7 @@ static int8_t fetch_sample(int c)
         if (--ch[c].wordcnt == 0) {     /* fine campione: loop */
             ch[c].cur = ch[c].lc & 0x7FFFF;
             ch[c].wordcnt = ch[c].len;
+            irq_pend |= 1 << c;         /* portage VGA32 : rechargement = début de bloc (HRM) */
         }
     }
     ch[c].hi ^= 1;
@@ -189,7 +242,7 @@ void paula_step(int colorclocks)
        non generiamo campioni di silenzio nel ring. Il task I2S emette gia'
        silenzio quando il ring e' vuoto. Evita ~3.5M iterazioni/s inutili
        durante Workbench/boot o finche' i giochi non abilitano AUD0..AUD3. */
-    if (audio_on == 0) return;
+    if ((audio_on | man_on) == 0 && !irq_pend) return;
 #endif
 
     /* Portage VGA32 : pilotage par événements, résultat identique à l'avance color clock par
@@ -201,17 +254,19 @@ void paula_step(int colorclocks)
      * (~3,5 M itérations/s × 4 canaux, chaque écriture suivie d'un memw). */
     int left = colorclocks;
     while (left > 0) {
+        int act = audio_on | man_on;
         int step = (int)((65536u - out_acc_fix + RESAMP_FIX - 1) / RESAMP_FIX);
         for (int c = 0; c < 4; c++) {
-            if (!((audio_on >> c) & 1)) continue;
+            if (!((act >> c) & 1)) continue;
             int due = ch[c].percnt < 1 ? 1 : ch[c].percnt;
             if (due < step) step = due;
         }
         if (step > left) step = left;
         for (int c = 0; c < 4; c++) {
-            if (!((audio_on >> c) & 1)) continue;
+            if (!((act >> c) & 1)) continue;
             ch[c].percnt -= step;
             if (ch[c].percnt <= 0) {
+                if (!((audio_on >> c) & 1)) { man_next(c); continue; }
                 ch[c].percnt = ch[c].per;
                 ch[c].sample = fetch_sample(c);
             }
@@ -222,6 +277,12 @@ void paula_step(int colorclocks)
             paula_emit();
         }
         left -= step;
+    }
+    /* Portage VGA32 : interruptions AUD0-3 (INTREQ bits 7-10), au plus une ligne de retard */
+    if (irq_pend) {
+        for (int c = 0; c < 4; c++)
+            if ((irq_pend >> c) & 1) intreq_set(7 + c);
+        irq_pend = 0;
     }
 }
 

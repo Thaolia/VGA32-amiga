@@ -88,6 +88,39 @@ void mem_reset(void)
     mem_map_update();
 }
 
+/* Portage VGA32 : instruction RESET du 68000. La ligne /RESET réinitialise les CIA (DDR à 0 :
+ * overlay remis, lecteurs désélectionnés) et les cartes autoconfig, ni le CPU ni la RAM : la ROM
+ * relit $4 sous l'overlay (vecteur PC) et repart par le chemin chaud (alertes, reboot). Depuis la
+ * chip RAM, l'instruction suivante est déjà dans la file de préchargement (RESET puis JMP (A0) du
+ * reboot logiciel) : l'overlay ne revient qu'après elle, via mem_reset_poll(). */
+static int reset_deferred = 0;
+
+static void reset_line(void)
+{
+    logmsg("[RESET] instruction RESET (PC=%06X)\n", m68k_get_reg(NULL, M68K_REG_PPC));
+    zorro_reset();
+    cia_reset();
+    drive_prb_write(0xFF);
+}
+
+void mem_reset_instr(void)
+{
+    if (!ovl && (m68k_get_reg(NULL, M68K_REG_PC) & 0xFFFFFF) < CHIP_SIZE) {
+        reset_deferred = 1;
+        m68k_end_timeslice();
+    } else {
+        reset_line();
+    }
+}
+
+void mem_reset_poll(void)
+{
+    if (!reset_deferred) return;
+    reset_deferred = 0;
+    m68k_execute(1);
+    reset_line();
+}
+
 /* log una-tantum per accessi a zone non mappate */
 static void unmapped(const char *op, uint32_t a)
 {

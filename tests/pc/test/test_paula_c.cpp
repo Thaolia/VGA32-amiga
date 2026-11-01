@@ -10,6 +10,7 @@
 
 uint8_t chip_ram[CHIP_SIZE];
 void logmsg(const char *, ...) {}
+void intreq_set(int) {}
 
 static uint32_t s_rng = 0x12345678u;
 static uint32_t rnd(uint32_t n) { s_rng = s_rng * 1103515245u + 12345u; return (s_rng >> 8) % n; }
