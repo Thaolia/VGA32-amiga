@@ -6,8 +6,24 @@ Kickstart 1.3 → Workbench) depuis l'ESP32-S3 + écran TFT vers une carte **Lil
 (ESP32 classique + PSRAM) : **sortie VGA** via [FabGL](https://github.com/fdivitto/FabGL) et
 **entrées PS/2** (souris, puis clavier).
 
-> ⚠️ Ce dépôt ne contient **aucun** matériel Amiga sous copyright. Vous fournissez votre propre
-> ROM Kickstart 1.3 et une image disque ADF, légalement obtenues (voir plus bas).
+> ⚠️ Ce dépôt ne contient **aucun** matériel Amiga sous copyright. Le build par défaut utilise
+> **[KickSlopStart](https://github.com/Thaolia/KickSlopStart)** (Kickstart 1.3 clean-room, MIT),
+> récupéré automatiquement ; vos disquettes ADF viennent de la carte SD. Les autres variantes
+> embarquent votre propre ROM Kickstart 1.3 et un ADF, légalement obtenus (voir plus bas).
+
+## Flasher sans compiler (navigateur)
+
+Chaque commit sur `main` publie une [release](https://github.com/Thaolia/VGA32-amiga/releases/latest)
+contenant **une image unique** `VGA32-amiga-kss-kickonly.bin` (bootloader + partitions + appli,
+env `ttgo-vga32-kss-kickonly`).
+
+1. Télécharger la dernière image :
+   **[VGA32-amiga-kss-kickonly.bin](https://github.com/Thaolia/VGA32-amiga/releases/latest/download/VGA32-amiga-kss-kickonly.bin)**
+2. Ouvrir le **[flasheur web ESP32](https://g3gg0.github.io/esp32_flasher/flasher.html)** (Chrome/Edge,
+   Web Serial), connecter la carte, charger le stub, choisir le `.bin`.
+3. **Flash Address = `0x00000000`** (l'image démarre à 0x0), puis *Write Flash*.
+
+Mettez vos `.adf` sur la microSD (`wb.adf` est inséré au boot, voir plus bas).
 
 ## État d'avancement
 
@@ -30,12 +46,22 @@ câblage et des GPIO : [docs/HARDWARE.md](docs/HARDWARE.md).
 
 - [PlatformIO](https://platformio.org/) (CLI `pio`).
 - Python 3 (pour les scripts `tools/`).
-- Votre **ROM Kickstart 1.3** (`kick34005.A500`, 256 Ko, CRC32 `C4F0F55F`) et une **image ADF**
-  (Workbench 1.3 ou autre) — depuis un Amiga que vous possédez, ou [Amiga Forever](https://www.amigaforever.com).
+- Accès réseau au premier build par défaut (téléchargement de KickSlopStart, ensuite en cache).
+- Pour les variantes `ttgo-vga32` / `-kickonly` / `-prof` / `-stress` seulement : votre **ROM
+  Kickstart 1.3** (`kick34005.A500`, 256 Ko, CRC32 `C4F0F55F`) et une **image ADF** (Workbench 1.3
+  ou autre) — depuis un Amiga que vous possédez, ou [Amiga Forever](https://www.amigaforever.com).
 
 ## Compiler et flasher
 
 ```bash
+# Build par défaut (= ttgo-vga32-kss-kickonly) : KickSlopStart, aucun fichier à fournir.
+# La dernière release KickSlopStart est téléchargée et vérifiée (SHA-256) à chaque build dans
+# build/kss/ (repli sur ce cache hors-ligne) ; KSS_TAG=v0.2.1 pio run  -> version figée.
+pio run
+pio run -t mergebin   # -> .pio/build/<env>/firmware-merged.bin, image unique à flasher à 0x0
+pio run -e ttgo-vga32-kss   # KickSlopStart + VOTRE assets/wb_adf.h embarqué
+
+# Variantes avec VOTRE Kickstart 1.3 :
 # 1. Embarquer VOS fichiers (2e argument = dossier de sortie 'assets', git-ignoré) :
 python3 tools/make_kick_header.py /chemin/vers/kick34005.A500 assets   # -> assets/kick_rom.h
 python3 tools/make_adf_header.py  /chemin/vers/workbench13.adf  assets # -> assets/wb_adf.h
@@ -61,7 +87,7 @@ pio run -e ttgo-vga32-prof
 ### Flash & moniteur sous Linux natif
 
 ```bash
-pio run -e ttgo-vga32 -t upload --upload-port /dev/ttyACM0   # ou /dev/ttyUSB0 (CP2104)
+pio run -t upload --upload-port /dev/ttyACM0   # ou /dev/ttyUSB0 (CP2104) ; -e <env> pour une variante
 pio device monitor -p /dev/ttyACM0
 ```
 
@@ -125,10 +151,12 @@ src/core/     cœur émulateur (copié de l'upstream, non modifié)
 src/hal/      couche matérielle VGA32 (VGA FabGL, PS/2, DAC, clavier Amiga)
 src/main.cpp  point d'entrée (alloc PSRAM, ROM/ADF, boucle trame)
 third_party/  Musashi (reconstruit) + sinfl
-tools/        scripts d'embarquement ROM/ADF
+tools/        scripts d'embarquement ROM/ADF, récupération KickSlopStart, image fusionnée
 tests/pc/     build PC + 8 sentinelles (compile src/core + third_party/musashi)
 docs/         HARDWARE, PORTING, ARCHITECTURE, design
 assets/       kick_rom.h / wb_adf.h (git-ignorés, à générer)
+build/kss/    ROM + kick_rom.h KickSlopStart (git-ignoré, rempli au build des envs -kss)
+.github/      release binaire à chaque commit sur main
 ```
 
 ## Licence

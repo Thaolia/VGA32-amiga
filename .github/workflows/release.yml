@@ -1,0 +1,54 @@
+# Release binaire à chaque push sur main : env par défaut ttgo-vga32-kss-kickonly (KickSlopStart,
+# aucun fichier Amiga sous copyright), image unique à flasher à 0x0 depuis un flasheur web.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ hashFiles('platformio.ini') }}
+
+      - name: PlatformIO
+        run: pip install platformio==6.2.0
+
+      - name: Build + image fusionnée
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: pio run -e ttgo-vga32-kss-kickonly -t mergebin
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha=$(git rev-parse --short=7 HEAD)
+          kss=$(cut -d' ' -f1 build/kss/VERSION)
+          tag="build-$(date -u +%Y%m%d)-$sha"
+          cp .pio/build/ttgo-vga32-kss-kickonly/firmware-merged.bin VGA32-amiga-kss-kickonly.bin
+          sha256sum VGA32-amiga-kss-kickonly.bin > SHA256SUMS
+          gh release create "$tag" VGA32-amiga-kss-kickonly.bin SHA256SUMS \
+            --target "$GITHUB_SHA" --latest \
+            --title "Build $sha (KickSlopStart $kss)" \
+            --notes "Commit $GITHUB_SHA — KickSlopStart $kss, env ttgo-vga32-kss-kickonly.
+          Image unique à flasher à l'adresse 0x00000000 (https://g3gg0.github.io/esp32_flasher/flasher.html)."

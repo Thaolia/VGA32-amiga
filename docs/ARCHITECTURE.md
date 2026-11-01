@@ -110,6 +110,23 @@ cartes de 1 Mo en $200000 et 256 Ko en $EC0000, adresses choisies par le Kicksta
 Schéma complet des tâches/ISR par cœur : `docs/taches-cores.html` (à ouvrir dans un navigateur ;
 copie en ligne privée : https://claude.ai/artifact/JcpjhFbaR1AqgrUXTcLFZ1).
 
+## Build : ROM, image fusionnée, release
+
+- `kick_rom.h` est résolu par le chemin d'inclusion : `assets/` (ROM de l'utilisateur) pour
+  `ttgo-vga32`, `-kickonly`, `-prof`, `-stress` ; `build/kss/` pour `ttgo-vga32-kss*`, où
+  `tools/pio_kickslopstart.py` (extra_script `pre:`) lance `tools/fetch_kickslopstart.py` puis
+  place `build/kss/` en TÊTE de `CPPPATH`. Le script interroge l'API GitHub (dernière release ou
+  `KSS_TAG`), vérifie la ROM (SHA-256 de l'API = `SHA256SUMS`, 262 144 o, en-tête `11114EF9`) et ne
+  réécrit `kick_rom.h` que si la ROM change (pas de recompilation de `main.cpp` sinon). Sans
+  réseau : repli sur la ROM en cache, dont le SHA-256 est revérifié contre `VERSION`.
+- `tools/pio_mergebin.py` (extra_script `post:` de toutes les envs) : cible `mergebin` →
+  `firmware-merged.bin` = `FLASH_EXTRA_IMAGES` (bootloader 0x1000, partitions 0x8000, boot_app0
+  0xE000) + appli `ESP32_APP_OFFSET` (0x10000), via `esptool merge_bin` en mode `keep` (mêmes
+  octets que `pio run -t upload`).
+- `.github/workflows/release.yml` : à chaque push sur `main`, build de l'env par défaut
+  (`ttgo-vga32-kss-kickonly`, aucun fichier sous copyright) + `mergebin`, puis release
+  `build-<date>-<sha7>` marquée *latest* avec `VGA32-amiga-kss-kickonly.bin` + `SHA256SUMS`.
+
 ## Dual-target / régression
 
 `tests/pc/` est le *ground truth* : rendu PPM/BMP/WAV, sentinelles synthétiques par ROM (`testvideo`,

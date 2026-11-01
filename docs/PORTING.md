@@ -520,6 +520,24 @@ l'invite disque, IO36 charge un ADF de la SD (le buffer ADF reste alloué). Env 
   dans les **deux** firmwares : la baisse depuis les ~170 Ko de la Phase 1 vient des phases 2-3,
   pas de cette variante.
 
+## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
+
+- `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au
+  2026-11-01) + aucun ADF embarqué → le build par défaut et la CI ne demandent aucun fichier Amiga.
+  `ttgo-vga32-kss` garde l'ADF de `assets/wb_adf.h`. Mécanisme : voir `docs/ARCHITECTURE.md`.
+- Vérifié : chaque `firmware.bin` des envs `-kss*` contient la ROM v0.2.1 octet pour octet et pas
+  celle de `assets/` ; `ttgo-vga32` contient toujours celle de `assets/`. Flash `-kss-kickonly`
+  945 469 o, `-kss` 1 325 969 o. Arbre propre sans `assets/kick_rom.h` → build OK (simulation CI).
+- `firmware-merged.bin` (1 011 376 o) : les 4 segments sont identiques aux binaires source à leurs
+  offsets. Bootloader : octets d'en-tête 0x02/0x20 (DIO, 4 Mo, 40 MHz) laissés tels que le build
+  les pose (`--flash_mode keep`) — réécrire le mode invaliderait le SHA-256 ajouté au bootloader.
+- Flasheur web [g3gg0](https://g3gg0.github.io/esp32_flasher/flasher.html) : pas de chargement par
+  URL (fichier local uniquement), adresse 0x00000000 par défaut → une image unique est le format adapté.
+- **Non vérifié sur matériel** (carte non branchée le 2026-11-01) : flash de l'image fusionnée à
+  0x0 et boot KickSlopStart v0.2.1 à confirmer au moniteur série/VGA.
+- `assets/kick_rom.h` local contenait encore KickStopStart v0.1 (CRC32 `886426AC`, chaîne
+  `exec 34.2 (clean-room reimpl)`), pas le KS 1.3 officiel : les envs non-`kss` l'embarquent.
+
 ## Harnais PC : source unique (2026-10-07)
 
 **Constat** : `tests/pc/` compilait sa propre copie du cœur (`tests/pc/src/*.cpp`, héritée du `pc/`

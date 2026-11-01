@@ -64,7 +64,10 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
 
 ## Build & flash
 
-- Build : `pio run -e ttgo-vga32`. Le chemin de `pio` et le port série dépendent de la machine :
+- Build : `pio run` = env par défaut `ttgo-vga32-kss-kickonly` (KickSlopStart téléchargée à chaque
+  build, ROM dans `build/kss/`, aucun fichier Amiga requis) ; c'est lui que publie la CI
+  (`.github/workflows/release.yml`) : ne pas le faire dépendre de `assets/`. Mesurer la perf de
+  référence avec `-e ttgo-vga32` (KS 1.3 + ADF embarqué). Le chemin de `pio` et le port série dépendent de la machine :
   voir `CLAUDE.local.md` (WSL2 : esptool Windows, cf. README).
 - Toolchain figée : `espressif32@6.10.0` → arduino-esp32 **2.0.17** (FabGL + I2S legacy). Ne
   jamais utiliser d'API arduino-esp32 3.x ni monter la plateforme sans le demander.
