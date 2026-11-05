@@ -1,0 +1,2 @@
+# bouton droit tenu dès la trame 0 (testregs, POTGOR en ET câblé)
+0 rmb 1

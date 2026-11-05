@@ -23,6 +23,13 @@ checks = [
     ("T6 y6", 0x70F0, 0x2000),
     # T7: EFE sur $0810, du bit 0 vers le bit 15 : bit 4 ouvre (gardé), bit 11 ferme (perdu)
     ("T7 fill exclusif", 0x4300, 0x07F0),
+    # T8 (graphics-line-v34 §10.2, ROM réelle observée)
+    *[(f"T8a $FF00 vers la droite w{i}", 0x8000 + 40 + 2 * i, 0xFF00) for i in range(3)],
+    *[(f"T8b $FF00 vers la gauche w{i}", 0x8000 + 120 + 2 * i, 0x7F80) for i in range(3)],
+    *[(f"T8c verticale x=40 y{y}", 0x8004 + 40 * y, 0x0080 if (8 <= y <= 15 or 24 <= y <= 30) else 0)
+      for y in range(8, 31)],
+    ("T8d $8001 w0", 0x8000 + 200, 0x8001), ("T8d $8001 w1", 0x8000 + 202, 0x8001),
+    ("T8d $8001 w2", 0x8000 + 204, 0x8000),
 ]
 ok = True
 for name, addr, want in checks:

@@ -570,6 +570,41 @@ Ctrl/Amiga G/Amiga D, comme F11) : `[RESET] reset clavier`, `PC=FC00D2`, retour 
 (trames 500 à 3 500), 0 erreur sur ~6 130 passes de stress PSRAM. Bureau WB 1.3 de référence
 (8,5 ms) non re-mesuré (pas de `wb.adf` sur la SD).
 
+## Améliorations issues des analyses KickSlopStart, 4e passe (2026-11-05)
+
+Source : 31 analyses nouvelles et ~30 mises à jour depuis la 3e passe. Trois agents les ont lues
+(puces custom ; CIA, entrées et timers ; disque, blitter et boot). Chaque manque a été revérifié dans
+le code avant d'être retenu ; la plupart des analyses ne décrivent que l'OS.
+
+### Lot A : cœur
+
+1. **Régression de la 3e passe : bouton droit mort sous KS 1.3** (gameport-v34 §10, custom-chips-v34
+   §2.3). KS 1.3 écrit POTGO `$0F00` à chaque trame (broches en sortie haute) puis lit le bouton
+   droit sur POTGOR bit 10. La 3e passe relisait une broche en sortie à DATxx en ignorant le bouton :
+   bit 10 toujours à 1, donc plus de menus Workbench. Le matériel fait un ET câblé : DATxx = 0 force
+   0, DATxx = 1 laisse le bouton tirer la ligne à la masse. **Cause de la non-détection** : `testregs`
+   ne testait que le bouton relâché. Il tourne désormais deux fois, la 2e avec le bouton droit tenu
+   (`test/regs_rmb.txt`), et l'ancien code échoue sur POTGO = $0C00 et $0F00.
+2. **Texture du mode ligne du blitter** (graphics-line-v34 §5.2, vecteurs §10.2) : chaque pixel prend
+   un seul bit de BLTBDAT tourné de BSH, étendu à tout le mot ; la phase suit l'axe majeur. L'ancien
+   code passait le mot tourné entier au minterm : le bit lu dépendait de x (motif à fréquence double,
+   lignes vers la gauche ou verticales fausses). Seules les lignes à motif changent. `testblit` T8
+   (4 lignes de la ROM réelle). Empreinte `testblitdiff` refigée avec preuve (voir `tests/pc/Makefile`).
+3. **Butée de la tête au cylindre 83** au lieu de 79 (FLOPPY_SPEC D6 ; trackdisk accepte un TD_SEEK au
+   cylindre 80). Les cylindres 80-83 n'ont pas de flux. L'ancien encodeur aurait lu au-delà de l'ADF
+   (ASan le signale sur l'ancien `disk.cpp`).
+4. **INTREQ bit 14 → niveau 6** (custom-chips-v34 §5.3, comportement de WinUAE).
+5. **CDANG OCS** : $000-$03E reste interdit au copper même avec COPCON bit 0 (custom-chips-v34 §5.8).
+6. **DSKSYN** (INTREQ bit 12, FLOPPY_SPEC B7) : levé dans `disk_line_tick` quand un mot égal à DSKSYNC
+   passe sous la tête (lecteur sélectionné, moteur en marche, disque présent, hors MSBSYNC). Coût par
+   ligne quand le moteur tourne : 2 ou 3 comparaisons ; la piste MFM est construite au besoin.
+
+Tests (chacun échoue sur l'ancien code) : `testregs` (POTGOR bouton tenu, niveau 6, butée), `testblit`
+T8, `testcopper` (CDANG), `testdisk` (DSKSYN, cylindre 80). Toutes les sentinelles PC sont vertes ;
+`testboot` et `testmfm` n'ont pas tourné (pas de ROM ni d'ADF dans `tests/pc/`). Contrôle sur
+KickSlopStart (PC) peu concluant : `--rdlog` ne journalise que les trames 140 à 180, où KickSlopStart
+ne lit pas POTGOR.
+
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
 - `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au

@@ -270,8 +270,9 @@ void copper_run_line(void)
         if (!(ir1 & 1)) {                          /* MOVE */
             uint32_t reg = ir1 & 0x1FE;
             /* CDANG (hardware reale): MOVE sotto 0x080 senza COPCON bit0
-               e' illegale e FERMA il copper fino al prossimo vblank */
-            if (reg < 0x080 && !(custom_get(0x02E) & 1)) {
+               e' illegale e FERMA il copper fino al prossimo vblank ; portage VGA32 : sur OCS,
+               CDANG ne débloque que $040-$07E, $000-$03E reste interdit (custom-chips-v34 §5.8) */
+            if (reg < 0x040 || (reg < 0x080 && !(custom_get(0x02E) & 1))) {
                 if (coplog < 24) { logmsg("[COP] %06X MOVE ILLEGALE %03X (CDANG): copper fermato\n", cop_pc, reg); coplog++; }
                 cop_stopped = 1;
                 return;

@@ -52,15 +52,16 @@ static const char *regname(uint32_t off)
     return NULL;
 }
 
-/* mappa bit INTREQ -> livello IPL 68000 (HRM tab. interrupt) */
-static const uint8_t int_level[14] = { 1,1,1,2, 3,3,3,4, 4,4,4,5, 5,6 };
+/* mappa bit INTREQ -> livello IPL 68000 (HRM tab. interrupt) ; portage VGA32 : le bit 14 de
+ * INTREQ, mis à 1 par logiciel, lève aussi le niveau 6 (custom-chips-v34 §5.3). */
+static const uint8_t int_level[15] = { 1,1,1,2, 3,3,3,4, 4,4,4,5, 5,6, 6 };
 
 void irq_update(void)
 {
     int lvl = 0;
     if (intena & 0x4000) {                       /* INTEN master */
-        uint16_t act = intena & intreq & 0x3FFF;
-        for (int b = 0; b < 14; b++)
+        uint16_t act = intena & intreq & 0x7FFF;
+        for (int b = 0; b < 15; b++)
             if (act & (1 << b) && int_level[b] > lvl) lvl = int_level[b];
     }
     m68k_set_irq(lvl);
@@ -132,11 +133,12 @@ static uint16_t custom_read_inner(uint32_t off)
     case 0x00A: return input_joy0dat();                 /* JOY0DAT: contatori mouse */
     case 0x00C: return input_joy1dat();                 /* JOY1DAT: joystick porta 1 */
     case 0x016: {                                       /* POTGOR: bit10 = destro */
-        /* Portage VGA32 : une broche programmée en sortie (OUTxx, bits 15/13/11/9 de POTGO) se
-         * relit à la valeur écrite (DATxx, bit juste en dessous) au lieu du bouton. */
+        /* Portage VGA32 : ET câblé. Une broche en sortie (OUTxx, bits 15/13/11/9 de POTGO) écrite
+         * à 0 (DATxx) se relit 0 ; écrite à 1, le bouton la tire quand même à la masse. KS 1.3
+         * écrit POTGO = $0F00 à chaque trame puis lit le bouton droit sur le bit 10. */
         uint16_t v = input_rmb() ? 0xFB00 : 0xFF00, potgo = regs[0x034 >> 1];
         for (int b = 8; b <= 14; b += 2)
-            if (potgo & (2u << b)) v = (uint16_t)((v & ~(1u << b)) | (potgo & (1u << b)));
+            if ((potgo & (2u << b)) && !(potgo & (1u << b))) v = (uint16_t)(v & ~(1u << b));
         return v;
     }
     case 0x018: return 0x3800;  /* SERDATR : TBE, TSRE, RXD au repos (portage VGA32 : émission

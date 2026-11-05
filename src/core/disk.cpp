@@ -40,13 +40,27 @@ static_assert(REV_BYTES % 2 == 0, "revolution MFM non alignee sur les mots");
 static uint32_t s_rot32;              /* position sous la tête, en 1/32 de mot */
 static uint32_t head_word(void) { return s_rot32 / 32u; }
 
+static void build_revolution(int track);
+static inline uint16_t rev_word(uint32_t w);
+
 void disk_line_tick(void)
 {
+    const uint32_t from = head_word();
     s_rot32 += 65u;
+    const int spin = drive_selected() && drive_motor_on() && drive_adf();
     if (s_rot32 >= REV_WORDS * 32u) {
         s_rot32 -= REV_WORDS * 32u;
-        if (drive_selected() && drive_motor_on() && drive_adf()) cia_b_index_pulse();
+        if (spin) cia_b_index_pulse();
     }
+    /* Portage VGA32 (docs/FLOPPY_SPEC.md §B7) : DSKSYN (INTREQ bit 12) à chaque mot égal à DSKSYNC
+     * qui passe sous la tête, avec ou sans DMA ; inhibé en MSBSYNC (ADKCON bit 9, GCR). */
+    if (!spin || (adkcon & 0x0200)) return;
+    const int track = drive_track() * 2 + drive_side();
+    if (rev_track != track) build_revolution(track);
+    const uint16_t sync = custom_get(0x07E);
+    const uint32_t n = (head_word() + REV_WORDS - from) % REV_WORDS;   /* mots passés : 2 ou 3 */
+    for (uint32_t k = 1; k <= n; k++)
+        if (rev_word((from + k) % REV_WORDS) == sync) { intreq_set(12); return; }
 }
 
 #ifndef ARDUINO
@@ -113,10 +127,16 @@ static void enc_long(uint32_t v)      /* long odd/even (per i checksum) */
     mfm_oddeven(b, 4);
 }
 
+#define ADF_TRACKS 160               /* 80 cylindres x 2 faces */
+
 static void build_revolution(int track)
 {
     const uint8_t *adf = drive_adf();
     memset(rev, 0, sizeof rev);
+    if (track >= ADF_TRACKS) {        /* portage VGA32 : cylindres 80-83 non formatés, pas de flux */
+        rev_track = track;
+        return;
+    }
     mfm_reset(rev);
     for (int s = 0; s < NSEC; s++) {
         mfm_bit(0); mfm_bit(0); mfm_bit(0); mfm_bit(0);   /* pre-gap:      */
@@ -191,7 +211,7 @@ static int track_commit(int track)
         ok |= 1 << s;
     }
     uint8_t *adf = drive_adf_rw();
-    if (ok != (1 << NSEC) - 1 || !adf) return ok;
+    if (ok != (1 << NSEC) - 1 || !adf || track >= ADF_TRACKS) return ok;   /* hors ADF : piste seule */
     for (int s = 0; s < NSEC; s++) {                      /* données : 128 longs impairs puis pairs */
         uint8_t *d = adf + ((uint32_t)track * NSEC + (uint32_t)s) * 512;
         for (uint32_t k = 0; k < 128; k++) {

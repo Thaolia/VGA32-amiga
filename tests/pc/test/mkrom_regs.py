@@ -8,6 +8,12 @@ Résultats en chip RAM, vérifiés par test/check_regs.py :
   $210  DMACONR après un blit à résultat nul (BZERO, bit 13) ; $212 après un blit non nul
   $214/$216/$218  POTGOR avec POTGO = $0800 (OUTLY, DATLY bas), $0C00 (DATLY haut), $0000 (entrée)
   $220  CIA-A PRA avec DF0 sélectionné, lecteur vide (/WPRO actif, bit 3 à 0 : FLOPPY_SPEC D9)
+  $222  POTGOR avec POTGO = $0F00 (valeur écrite par KS 1.3 à chaque trame)
+  $226  nombre de pas vers l'extérieur pour revenir à /TK0 après 90 pas vers l'intérieur (DF0 vide) :
+        butée de la tête au cylindre 83 (FLOPPY_SPEC D6, trackdisk-raw-changeint-v34 §3)
+  $224  nombre d'interruptions de niveau 6 servies après INTENA = INTREQ = $C000 (bit 14)
+Lancée avec test/regs_rmb.txt (bouton droit tenu dès la trame 0), elle doit donner bit 10 à 0
+dans $214, $216, $218 et $222 : le bouton tire la ligne à la masse même en sortie haute.
   $21C  $600DF00D = fin atteinte"""
 import sys
 
@@ -77,11 +83,40 @@ code = asm([
     movew_imm(0x0800, 0xDFF034), movew_to(0xDFF016, 0x214),
     movew_imm(0x0C00, 0xDFF034), movew_to(0xDFF016, 0x216),
     movew_imm(0x0000, 0xDFF034), movew_to(0xDFF016, 0x218),
+    movew_imm(0x0F00, 0xDFF034), movew_to(0xDFF016, 0x222),
     # /WPRO lecteur vide
     H("13FC00FF00BFD300"),         # move.b #$FF,$BFD300  (DDRB)
     H("13FC007700BFD100"),         # move.b #$77,$BFD100  (/MTR et /SEL0 bas)
     H("11F900BFE0010220"),         # move.b $BFE001,$220.w
     H("13FC00FF00BFD100"),         # move.b #$FF,$BFD100  (désélection)
+    # butée de la tête : 90 pas vers l'intérieur (/DIR bas), puis compte des pas jusqu'à /TK0
+    H("13FC00F500BFD100"),         # move.b #$F5,$BFD100  (/SEL0 et /DIR bas)
+    H("383C0059"),                 # move.w #89,d4
+    "si", H("13FC00F400BFD100"),   # move.b #$F4,$BFD100  (/STEP bas : un pas)
+    H("13FC00F500BFD100"),         # move.b #$F5,$BFD100
+    ("dbra_d4", "si"),
+    H("13FC00F700BFD100"),         # move.b #$F7,$BFD100  (/DIR haut : vers l'extérieur)
+    H("7A00"),                     # moveq #0,d5
+    "so", H("0839000400BFE001"),   # btst #4,$BFE001      (/TK0)
+    ("beq", "sz"),
+    H("13FC00F600BFD100"),         # move.b #$F6,$BFD100
+    H("13FC00F700BFD100"),         # move.b #$F7,$BFD100
+    H("5245"),                     # addq.w #1,d5
+    H("0C450100"),                 # cmpi.w #256,d5       (garde-fou)
+    ("bls", "so"),
+    "sz", H("31C50226"),           # move.w d5,$226.w
+    H("13FC00FF00BFD100"),         # move.b #$FF,$BFD100
+    # INTREQ bit 14 -> niveau 6. Handler en $300 : addq.w #1,$224.w ; move.w #$4000,$DFF09C ; rte
+    movel_imm(0x52780224, 0x300), movel_imm(0x33FC4000, 0x304), movel_imm(0x00DFF09C, 0x308),
+    H("31FC4E73030C"),             # move.w #$4E73,$30C.w
+    H("21FC000003000078"),         # move.l #$300,$78.w  (autovecteur niveau 6)
+    H("42780224"),                 # clr.w $224.w
+    movew_imm(0xC000, 0xDFF09A),   # INTENA : INTEN
+    movew_imm(0xC000, 0xDFF09C),   # INTREQ : bit 14
+    H("46FC2000"),                 # move.w #$2000,sr
+    H("383C0064"), "i6", ("dbra_d4", "i6"),
+    H("46FC2700"),                 # move.w #$2700,sr
+    movew_imm(0x4000, 0xDFF09A),   # INTENA : INTEN coupé
     H("21FC600DF00D021C"),         # move.l #$600DF00D,$21C.w
     "end", ("bra", "end"),
 ])

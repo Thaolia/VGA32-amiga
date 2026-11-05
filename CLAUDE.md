@@ -26,6 +26,9 @@ OS opérationnel du projet. Portage de l'émulateur `amiga500-esp32` (ESP32-S3 +
   `denise_line_cb`, `cia_a_kbd_shift_in`, `input_mouse_delta`, `drive_eject`, allocations PSRAM.
   Une modif dans ces blocs se valide sur la carte, et le rapport le dit.
 - Tout code ajouté au cœur pour le PC seul va sous `#ifndef ARDUINO`, sans toucher au chemin cible.
+- Test d'un registre d'entrée (bouton, joystick, ligne de lecteur) : couvrir l'état actif ET l'état au
+  repos, avec la valeur réellement écrite par KS 1.3 (POTGO `$0F00`). Un test au repos seul a laissé
+  passer la régression du bouton droit (3e passe).
 - Modif du cœur censée être neutre pour la cible → le prouver : les sections chargées de l'ELF
   (`.flash.text`, `.iram0.text`, `.flash.rodata`, `.dram0.data`) restent identiques
   (`objcopy -O binary -j <section>` puis `cmp`). Le `firmware.bin` change toujours dès qu'une

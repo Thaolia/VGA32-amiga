@@ -1,7 +1,7 @@
 /* test_disk_c.cpp — Tests du DMA disque (core/disk.cpp) avec des stubs à la place du lecteur,
  * de Agnus et de la chip RAM : position de rotation et WORDSYNC (docs/FLOPPY_SPEC.md §A3, A4,
  * B5, B6, B12, F1) ; écriture d'une piste et reconversion en ADF (§E), avec un encodeur MFM
- * propre au test. */
+ * propre au test ; interruption DSKSYN (§B7) ; cylindres 80-83 au-delà de l'ADF (§D6). */
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -20,13 +20,16 @@ const uint8_t *drive_adf(void) { return s_nodisk ? nullptr : s_adf; }
 static int s_wp = 0;
 uint8_t *drive_adf_rw(void) { return s_nodisk || s_wp ? nullptr : s_adf; }
 int drive_write_protected(void) { return s_wp; }
-int drive_track(void) { return 0; }
+static int s_cyl = 0;
+int drive_track(void) { return s_cyl; }
 int drive_side(void) { return 0; }
 static int s_motor = 1, s_sel = 1, s_index = 0;
 int drive_motor_on(void) { return s_motor; }
 int drive_selected(void) { return s_sel; }
 void cia_b_index_pulse(void) { s_index++; }
 void logmsg(const char *, ...) {}
+static int s_dsksyn = 0;
+void intreq_set(int bit) { intreq |= (uint16_t)(1 << bit); if (bit == 12) s_dsksyn++; }
 
 static int fails = 0;
 #define CHECK(c) do { if (!(c)) { printf("FAIL %s:%d  %s\n", __FILE__, __LINE__, #c); fails++; } \
@@ -227,6 +230,43 @@ int main(void)
     for (uint32_t i = 0; i < sizeof s_adf; i++) s_adf[i] = (uint8_t)(i * 13 + 5);
     disk_track_invalidate();
     CHECK(read_at(0, 0, 600) == 1 && sector_after_sync() == 0 && l32(58) != before);
+
+    /* DSKSYN (§B7) : levé au passage des syncs, sans DMA ; 11 secteurs = 11 paires de 4489, au
+       plus une interruption par ligne -> entre 11 et 22 par révolution */
+    adkcon = 0; s_regs[0x07E >> 1] = 0x4489;
+    seek_time(0, 0); s_dsksyn = 0;
+    for (int i = 0; i < 3119; i++) disk_line_tick();
+    CHECK(s_dsksyn >= 11 && s_dsksyn <= 22);
+    adkcon = 0x0200;                                   /* MSBSYNC : inhibé */
+    s_dsksyn = 0; for (int i = 0; i < 3119; i++) disk_line_tick();
+    CHECK(s_dsksyn == 0);
+    adkcon = 0; s_motor = 0;
+    s_dsksyn = 0; for (int i = 0; i < 3119; i++) disk_line_tick();
+    CHECK(s_dsksyn == 0);
+    s_motor = 1; s_regs[0x07E >> 1] = 0x1234;          /* sync absent de la piste */
+    s_dsksyn = 0; for (int i = 0; i < 3119; i++) disk_line_tick();
+    CHECK(s_dsksyn == 0);
+    s_regs[0x07E >> 1] = 0x4489;
+
+    /* cylindre 80 (§D6, trackdisk accepte TD_SEEK 901 120) : au-delà de l'ADF, piste sans flux ;
+       une écriture n'y touche pas l'ADF */
+    s_cyl = 80;
+    disk_track_invalidate();
+    adkcon = 0;
+    memset(chip_ram, 0xEE, 0x10000);
+    seek_time(0, 0); disk_irq_pending = 0;
+    disk_dsklen_write(0x8000 | 100); disk_dsklen_write(0x8000 | 100);
+    CHECK(disk_irq_pending == 1 && w16(0) == 0 && w16(198) == 0);
+    adkcon = 0x0400;
+    CHECK(read_at(0, 0, 600) == 0);
+    static uint8_t adf_copy[901120];
+    memcpy(adf_copy, s_adf, sizeof s_adf);
+    adkcon = 0;
+    build_track(160, 0, data, -1);
+    write_track(0, 0);
+    CHECK(disk_irq_pending == 1 && memcmp(adf_copy, s_adf, sizeof s_adf) == 0);
+    s_cyl = 0;
+    disk_track_invalidate();
 
     printf("disk : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;

@@ -101,7 +101,8 @@ dimensionne alors la mémoire comme sur un A500 + 512 Ko et place ExecBase en sl
    (→ `denise_line_cb` → `video_vga` écrit la ligne dans le FB interne ; écritures copper différées
    appliquées) → `m68k_execute(455)` → `mem_reset_poll` (RESET depuis la chip RAM) →
    `paula_step` (colorclock, IRQ AUD0-3) → `cia_tick_cpu` (45,5 E par ligne) → `disk_line_tick`
-   (rotation, index /FLG) → `cia_tod_hsync`.
+   (rotation, index /FLG, DSKSYN au passage des syncs, lecteur sélectionné qui tourne) →
+   `cia_tod_hsync`.
 3. Fin de trame : `cia_tod_vsync` → `intreq_set(5)` (VBlank) → `kbd_amiga_step` (→ éventuel
    `mem_system_reset` du reset clavier) →
    `disk_switch_poll` → `video_vga_osd_tick` → log `=== frame` (`VGA32_DEBUG`, temps de calcul,

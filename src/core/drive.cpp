@@ -18,7 +18,7 @@
 
 static int sel = 0;        /* DF0 selezionato (/SEL0 basso)    */
 static int motor = 0;      /* stato motore latchato            */
-static int track = 0;      /* posizione testina 0..79          */
+static int track = 0;      /* posizione testina 0..83          */
 static int side = 0;       /* /SIDE da CIA-B PRB bit2 (0=faccia inferiore) */
 static uint8_t prb_prev = 0xFF;
 static int evlog = 0;      /* log limitato dei primi eventi    */
@@ -123,7 +123,9 @@ void drive_prb_write(uint8_t prb)
     /* impulso di step: fronte di discesa di /STEP a drive selezionato */
     if (sel_now && (prb_prev & 0x01) && !(prb & 0x01)) {
         if (prb & 0x02) { if (track > 0) track--; }   /* /DIR alto: verso traccia 0 */
-        else            { if (track < 79) track++; }  /* /DIR basso: verso il centro */
+        else            { if (track < 83) track++; }  /* /DIR basso: verso il centro ; portage VGA32 :
+                                                         butée à 80 + 3 (FLOPPY_SPEC D6), trackdisk
+                                                         accepte le cylindre 80 */
         if (disk_present && chng_latch) {
             chng_latch = 0;                   /* step a disco inserito: latch azzerato */
             logmsg("[DRV] step -> traccia %d: DISCO RILEVATO (/CHNG si alza)\n", track);

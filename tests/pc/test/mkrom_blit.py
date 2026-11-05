@@ -5,6 +5,8 @@
   T3 minterm EA (D = A|C con B=FFFF) con FWM/LWM parziali
   T4 linea 45° (8 px) + T5 linea bassa dx=6,dy=2 (7 px), raster 40 byte
   T7 remplissage exclusif (EFE) d'un mot
+  T8 lignes texturées (BLTBDAT + BSH), minterm $CA de graphics (JAM2) : un seul bit du motif par
+     pixel, phase le long de l'axe majeur (graphics-line-v34 §5.2 et vecteurs §10.2)
 Verifica con test/check_blit.py (implementazione indipendente in Python)."""
 import struct, sys
 
@@ -86,6 +88,28 @@ code += mw(B+0x050, 0x0000) + mw(B+0x052, 0x3100)
 code += mw(B+0x054, 0x0000) + mw(B+0x056, 0x4300)
 code += mw(B+0x064, 0x0000) + mw(B+0x066, 0x0000)
 code += mw(B+0x058, (1 << 6) | 1)
+
+# T8 : raster 0x8000, 40 octets par ligne ; minterm $CA (D = A ? B : C), ADAT $8000
+def tline(x0, y0, dx, dy, ptrn, left=False, ymajor=False):
+    """Ligne horizontale (dy = 0) ou verticale (dx = 0) depuis (x0,y0), motif ptrn, BSH = 15."""
+    m = dy if ymajor else dx
+    c  = mw(B+0x074, 0x8000) + mw(B+0x044, 0xFFFF) + mw(B+0x046, 0xFFFF)
+    c += mw(B+0x072, ptrn)
+    c += mw(B+0x040, ((x0 & 15) << 12) | 0x0BCA)
+    con1 = 0xF000 | 0x0040 | 0x0001                  # BSH=15, SIGN, LINE
+    if not ymajor: con1 |= 0x0010                     # SUD : axe majeur X
+    if left: con1 |= 0x0004                           # AUL : axe majeur décroissant
+    c += mw(B+0x042, con1)
+    a = 0x8000 + 40 * y0 + 2 * (x0 >> 4)
+    c += mw(B+0x048, 0) + mw(B+0x04A, a) + mw(B+0x054, 0) + mw(B+0x056, a)
+    c += mw(B+0x052, -2 * m)                           # 4*mineur - 2*majeur (mineur = 0)
+    c += mw(B+0x064, -4 * m) + mw(B+0x062, 0) + mw(B+0x060, 40)
+    c += mw(B+0x058, ((m + 1) << 6) | 2)
+    return c
+code += tline(0, 1, 40, 0, 0xFF00)                    # T8a : (0,1) -> (40,1)
+code += tline(40, 3, 40, 0, 0xFF00, left=True)        # T8b : (40,3) -> (0,3)
+code += tline(40, 8, 0, 22, 0xFF00, ymajor=True)      # T8c : (40,8) -> (40,30)
+code += tline(0, 5, 40, 0, 0x8001)                    # T8d : (0,5) -> (40,5), motif $8001
 
 code += bytes.fromhex("60FE")
 

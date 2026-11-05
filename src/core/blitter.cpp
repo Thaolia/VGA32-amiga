@@ -184,8 +184,10 @@ static void blit_line(uint16_t bltsize)
             uint16_t am = adat;
             if (i == len - 1) am &= custom_get(0x046);   /* LWM sull'ultimo pixel */
             uint16_t ahold = (uint16_t)(am >> x);
-            uint16_t bhold = (uint16_t)((bdat >> bsh) | (bdat << (16 - bsh)));
-            if (bsh == 0) bhold = bdat;
+            /* Portage VGA32 : un seul bit de texture par pixel (bit 0 de BDAT tourné de BSH), étendu
+             * à tout le mot ; la phase suit l'axe majeur, pas x (graphics-line-v34 §5.2). */
+            const uint16_t brot = bsh ? (uint16_t)((bdat >> bsh) | (bdat << (16 - bsh))) : bdat;
+            const uint16_t bhold = (brot & 1) ? 0xFFFF : 0x0000;
             uint16_t chold = rd16(cpt);
             uint16_t d = minterm(&mt, ahold, bhold, chold);
             dor |= d;

@@ -123,7 +123,10 @@ testpaula:
 # d'origine (avant minterm sans branchement / accès 16 bits / fill par table) :
 # 86299a0228d76f048bc7184db08209da ; refigée le 2026-10-29 pour le remplissage exclusif (bord
 # d'ouverture gardé, testblit T7) : le même scénario sans EFE reste identique à l'ancien code.
-BLIT_REF_MD5 = 57f546b8e640a8642a2f61af8ba46b94
+# Refigée le 2026-11-05 pour la texture du mode ligne (un bit par pixel, testblit T8 ;
+# 57f546b8e640a8642a2f61af8ba46b94 avant) : avec BLTBDAT plein ou vide sur les lignes, ancien et
+# nouveau code donnent la même empreinte (1393b75e3353a87b12725c037f3acb93).
+BLIT_REF_MD5 = e3c9e51f43fa290eb392894331bc866c
 testblitdiff:
 	g++ -O2 -I$(CORE) -I$(M68KDIR) -o tblitdiff test/test_blit_c.cpp $(CORE)/blitter.cpp
 	./tblitdiff test_blit.bin > /dev/null
@@ -144,10 +147,13 @@ testdenise:
 
 # registres lus par la ROM et les logiciels (analyses KickSlopStart du 2026-11-01) : VHPOSR
 # horizontal, SERDATR/SERDAT (TBE), miroir chip RAM jusqu'à $1FFFFF, BZERO, POTGOR selon POTGO
+# (bouton relâché puis tenu : ET câblé), INTREQ bit 14 -> niveau 6
 testregs: a500
 	python3 test/mkrom_regs.py test/testrom_regs.bin
 	./a500 test/testrom_regs.bin 2 --ramdump regs.ram > /dev/null
 	python3 test/check_regs.py regs.ram
+	./a500 test/testrom_regs.bin 2 --mousescript test/regs_rmb.txt --ramdump regs_rmb.ram > /dev/null
+	python3 test/check_regs.py regs_rmb.ram rmb
 
 # /RESET système du reset clavier (Ctrl-Amiga-Amiga) : puces remises à zéro, RAM conservée
 testsysreset: a500

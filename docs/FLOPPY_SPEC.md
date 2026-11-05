@@ -24,15 +24,17 @@ d'implémentation de WinUAE, libre ; **[?]** = incertain.
 | A3, B5 | Position de rotation continue, lecture depuis le mot sous la tête | **fait** (2026-10-07) |
 | B6 | WORDSYNC : attente de DSKSYNC, sync non stocké, premier mot = mot suivant | **fait** (2026-10-07) |
 | B8, F4 | Durée réaliste du DMA (DSKBLK après attente du sync + len × 31,6 µs) | à faire (instantané aujourd'hui, comme le mode Kickstart accéléré de WinUAE) |
-| B7 | Interruption DSKSYNC (INTREQ bit 12) au passage des syncs | à faire |
-| A4 | Index une fois par révolution → CIA-B /FLG | à faire (le CIA n'a pas d'entrée /FLG) |
+| B7 | Interruption DSKSYNC (INTREQ bit 12) au passage des syncs | **fait** (2026-11-05) : testé à chaque ligne sur les mots passés sous la tête, une interruption au plus par ligne, avec ou sans DMA, inhibée en MSBSYNC |
+| A4 | Index une fois par révolution → CIA-B /FLG | **fait** (2026-10-27) |
+| D6 | Pas au-delà de la piste 79 | **fait** (2026-11-05) : butée au cylindre 83, cylindres 80-83 sans flux (lecture à zéro, pas de sync), écriture sans effet sur l'ADF |
 | B9, B10, B3 | Abandon (bit 15 à 0), mise à jour de longueur, len = 0, DMA suspendu sans DMAEN/DSKEN | à faire |
 | C | DSKBYTR complet | à faire |
 | D | Délai /RDY, moteur latché sur /SEL, /CHNG, DF1-3 absents | partiel (voir `drive.cpp`) |
 | E | Écriture DMA + décodage AmigaDOS + validation tout ou rien | **fait** (2026-10-29) : syncs cherchés alignés sur les mots, sans mot 0x5555 ajouté [WU], ADF en PSRAM seulement (`VGA32_DISK_WRITE`) |
 
 Tests : `tests/pc`, `make testdisk` (stubs, sans ROM ni ADF) : position de rotation, WORDSYNC,
-sync absent, écriture d'une piste (tout ou rien, disque protégé), changement de disque.
+sync absent, écriture d'une piste (tout ou rien, disque protégé), changement de disque, DSKSYN,
+cylindre 80. `make testregs` : butée de la tête (90 pas vers l'intérieur, 83 pour revenir à /TK0).
 
 ## A. Timing du flux disque
 
@@ -184,8 +186,8 @@ CIA-B PRB : bit 7 /MTR, bits 6-3 /SEL3-/SEL0 (bit 3 = DF0), bit 2 /SIDE, bit 1 /
    sinon table des positions de sync sur les 16 décalages, construite paresseusement). **Fait** (recherche
    alignée sur les mots).
 3. Durée réaliste du DMA (risques F4). Impact moyen à élevé, coût faible.
-4. Interruption DSKSYNC. Impact moyen, coût faible.
-5. Index → CIA-B /FLG. Impact moyen, coût faible (entrée /FLG à ajouter au CIA).
+4. Interruption DSKSYNC. Impact moyen, coût faible. **Fait.**
+5. Index → CIA-B /FLG. Impact moyen, coût faible (entrée /FLG à ajouter au CIA). **Fait.**
 6. Cas limites DSKLEN/DMACON (B3, B9, B10). Impact moyen, coût faible.
 7. DSKBYTR complet. Impact faible à moyen, coût faible à moyen.
 8. Lignes d'état (/RDY, moteur latché, /CHNG, DF1-3 absents). Impact moyen pour le changement de disque.

@@ -11,6 +11,7 @@ def at(x, y):                       # x en pixels lores (le PPM double chaque pi
     return tuple(px[o:o + 3])
 
 BLUE, RED, GREEN, BLACK = (0, 0, 255), (255, 0, 0), (0, 255, 0), (0, 0, 0)
+YELLOW = (255, 255, 0)
 checks = [
     ("ligne $30 : couleur initiale", 100, 0x30, BLUE),
     ("ligne $40 : debut de ligne avant le WAIT h=$40", 2, 0x40, BLUE),
@@ -20,6 +21,8 @@ checks = [
     ("ligne $51", 5, 0x51, GREEN),
     ("ligne 272 (> 255) : plans encore allumes", 100, 272, GREEN),
     ("ligne $12D : plans eteints (WAIT $2C01 apres $FFDF)", 100, 0x12D, BLACK),
+    ("ligne $12F : MOVE $044 permis avec CDANG", 100, 0x12F, YELLOW),
+    ("ligne $132 : MOVE $03E interdit meme avec CDANG (copper arrete)", 100, 0x132, YELLOW),
 ]
 ok = True
 for name, x, y, want in checks:

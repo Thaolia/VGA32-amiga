@@ -3,6 +3,7 @@
 import sys
 
 ram = open(sys.argv[1] if len(sys.argv) > 1 else "regs.ram", "rb").read()
+rmb = len(sys.argv) > 2 and sys.argv[2] == "rmb"   # run avec le bouton droit tenu
 def w(a): return int.from_bytes(ram[a:a + 2], "big")
 def l(a): return int.from_bytes(ram[a:a + 4], "big")
 
@@ -16,12 +17,18 @@ checks = [
     ("DMACONR après blit nul : BZERO", w(0x210), w(0x210) & 0x2000 != 0),
     ("DMACONR après blit non nul : pas de BZERO", w(0x212), w(0x212) & 0x2000 == 0),
     ("POTGOR, POTGO=$0800 (DATLY sorti bas) : bit 10 à 0", w(0x214), w(0x214) & 0x0400 == 0),
-    ("POTGOR, POTGO=$0C00 (DATLY sorti haut) : bit 10 à 1", w(0x216), w(0x216) & 0x0400 != 0),
-    ("POTGOR, POTGO=$0000 (entrée, bouton relâché) : bit 10 à 1", w(0x218), w(0x218) & 0x0400 != 0),
     ("PRA, DF0 vide sélectionné : /WPRO actif (bit 3 à 0)", ram[0x220], ram[0x220] & 0x08 == 0),
     ("PRA, DF0 vide sélectionné : /RDY inactif (bit 5 à 1)", ram[0x220], ram[0x220] & 0x20 != 0),
+    ("butée de la tête : 83 pas pour revenir au cylindre 0", w(0x226), w(0x226) == 83),
+    ("INTREQ bit 14 : niveau 6 servi une fois", w(0x224), w(0x224) == 1),
     ("fin atteinte", l(0x21C), l(0x21C) == 0x600DF00D),
 ]
+# ET câblé : la sortie haute n'empêche pas le bouton de tirer la ligne à la masse
+for pot, a in ((0x0C00, 0x216), (0x0000, 0x218), (0x0F00, 0x222)):
+    if rmb:
+        checks.append((f"POTGOR, POTGO=${pot:04X}, bouton droit tenu : bit 10 à 0", w(a), w(a) & 0x0400 == 0))
+    else:
+        checks.append((f"POTGOR, POTGO=${pot:04X}, bouton relâché : bit 10 à 1", w(a), w(a) & 0x0400 != 0))
 ok = True
 for name, got, good in checks:
     ok &= good
