@@ -4,6 +4,7 @@
  * Format d'une trame : SYNC(0xA5) TYPE PAYLOAD... CHK, CHK = somme 8 bits de TYPE+PAYLOAD.
  *   'K' : 1 octet  = rawcode Amiga (bits 0-6) | 0x80 si relâchée
  *   'M' : 3 octets = dx (int8), dy (int8, convention Amiga : bas = +), boutons (b0 G, b1 D)
+ *   'J' : 1 octet  = joystick port 2 : haut (b0), bas (b1), gauche (b2), droite (b3), fire (b4)
  * Tout octet hors trame est rendu tel quel (SP_ASCII) : un terminal série reste utilisable.
  * L'encodeur côté PC est tools/remote_input.py.
  */
@@ -14,11 +15,11 @@
 
 #define SP_SYNC 0xA5
 
-typedef enum { SP_ASCII, SP_KEY, SP_MOUSE } sp_kind_t;
+typedef enum { SP_ASCII, SP_KEY, SP_MOUSE, SP_JOY } sp_kind_t;
 
 typedef struct {
     sp_kind_t kind;
-    uint8_t   a;          /* SP_ASCII : octet ; SP_KEY : rawcode Amiga */
+    uint8_t   a;          /* SP_ASCII : octet ; SP_KEY : rawcode Amiga ; SP_JOY : directions + fire */
     uint8_t   down;       /* SP_KEY : 1 enfoncée, 0 relâchée */
     int8_t    dx, dy;     /* SP_MOUSE */
     uint8_t   lmb, rmb;   /* SP_MOUSE */
@@ -35,5 +36,23 @@ void sp_init(sp_parser_t *p);
 
 /* Consomme un octet. Retourne 1 si *ev a été rempli, 0 sinon. */
 int sp_feed(sp_parser_t *p, uint8_t b, sp_event_t *ev);
+
+/* File souris : les trames 'M' arrivent par rafales (la carte tourne à 15-40 fps) alors
+ * qu'input.device n'échantillonne qu'une fois par trame émulée. Chaque segment = un état de
+ * boutons puis le mouvement qui le suit ; une transition de boutons occupe une trame émulée à
+ * elle seule, après le mouvement reçu avant elle (clic ni perdu ni déplacé). */
+#define SP_MQ 16
+typedef struct { uint8_t btn; int dx, dy; } sp_mseg_t;
+typedef struct {
+    sp_mseg_t q[SP_MQ];
+    uint8_t   head, n;
+    uint8_t   btn;        /* état des boutons appliqué (b0 G, b1 D) */
+} sp_mouse_t;
+
+void sp_mouse_init(sp_mouse_t *m);
+/* trame 'M' reçue : mouvement (avant) puis état des boutons */
+void sp_mouse_push(sp_mouse_t *m, int dx, int dy, uint8_t btn);
+/* une trame émulée : delta à appliquer (|d| <= step) et état des boutons */
+void sp_mouse_step(sp_mouse_t *m, int step, int *dx, int *dy, uint8_t *btn);
 
 #endif /* SERIAL_PROTO_H */

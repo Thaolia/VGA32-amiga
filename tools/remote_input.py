@@ -7,16 +7,21 @@ envoyés à la carte en trames binaires (décodées par src/hal/serial_proto.cpp
 F12 libère la capture, F11 envoie Ctrl-Amiga-Amiga (reset clavier : redémarrage à chaud, RAM
 conservée). Les logs série de la carte s'affichent dans ce terminal.
 
+Joystick (port 2 de l'Amiga) : une manette branchée au PC est utilisée pendant la capture
+(stick gauche ou croix, bouton 0 = fire). Sans manette, --joy-keys détourne les flèches et Ctrl
+droit (fire) vers le joystick ; ces touches ne vont alors plus au clavier Amiga.
+
 Les touches sont lues par POSITION physique (scancode USB HID, indépendant du
 layout du PC) et traduites en rawcode Amiga ; c'est l'Amiga qui applique sa keymap.
 
 Dépendances : pygame (>= 2) ou pygame-ce, + pyserial.
 Usage :
-    python3 tools/remote_input.py [--port /dev/ttyACM0] [--mouse-scale 1.0] [--no-log]
+    python3 tools/remote_input.py [--port /dev/ttyACM0] [--mouse-scale 1.0] [--joy-keys] [--no-log]
 
 Format de trame : 0xA5 TYPE PAYLOAD... CHK  (CHK = somme 8 bits de TYPE+PAYLOAD)
     'K' : rawcode | 0x80 si relâchée
     'M' : dx int8, dy int8 (bas = +), boutons (b0 gauche, b1 droit)
+    'J' : joystick port 2 : haut b0, bas b1, gauche b2, droite b3, fire b4
 """
 import argparse
 import os
@@ -82,6 +87,9 @@ HID_TO_AMIGA = {
 }
 HID_F12 = 69                 # libère la capture (pas de F12 sur Amiga)
 HID_F11 = 68                 # reset clavier Ctrl-Amiga-Amiga (pas de F11 sur Amiga ; Super droit souvent absent)
+# --joy-keys : flèches + Ctrl droit -> bits de la trame 'J'
+JOY_KEYS = {82: 0x01, 81: 0x02, 80: 0x04, 79: 0x08, 228: 0x10}
+AXIS_DEAD = 0.5              # seuil des axes analogiques de la manette
 RESET_KEYS = (0x63, 0x66, 0x67)   # Ctrl, Amiga gauche, Amiga droite
 
 
@@ -96,6 +104,26 @@ def encode_key(raw, down):
 
 def encode_mouse(dx, dy, lmb, rmb):
     return frame('M', [dx & 0xFF, dy & 0xFF, (1 if lmb else 0) | (2 if rmb else 0)])
+
+
+def encode_joy(bits):
+    return frame('J', [bits & 0x1F])
+
+
+def pad_bits(pad):
+    """Manette pygame -> bits de la trame 'J' (stick gauche ou croix, bouton 0 = fire)."""
+    bits = 0
+    if pad.get_numaxes() >= 2:
+        x, y = pad.get_axis(0), pad.get_axis(1)
+        bits |= (0x01 if y < -AXIS_DEAD else 0) | (0x02 if y > AXIS_DEAD else 0)
+        bits |= (0x04 if x < -AXIS_DEAD else 0) | (0x08 if x > AXIS_DEAD else 0)
+    if pad.get_numhats() >= 1:
+        hx, hy = pad.get_hat(0)      # hy = +1 vers le haut
+        bits |= (0x01 if hy > 0 else 0) | (0x02 if hy < 0 else 0)
+        bits |= (0x04 if hx < 0 else 0) | (0x08 if hx > 0 else 0)
+    if pad.get_numbuttons() >= 1 and pad.get_button(0):
+        bits |= 0x10
+    return bits
 
 
 def open_port(path):
@@ -134,6 +162,9 @@ class Remote:
         self.lmb = self.rmb = False
         self.acc_x = self.acc_y = 0.0
         self.last_mouse = 0.0
+        self.joy = 0             # dernier état de joystick envoyé
+        self.joy_keys = 0        # bits tenus au clavier (--joy-keys)
+        self.joy_pad = 0         # bits tenus à la manette
 
     def send(self, data):
         try:
@@ -159,6 +190,16 @@ class Remote:
                 return
             self.held.discard(raw)
         self.send(encode_key(raw, down))
+
+    def joystick(self, keys=None, pad=None):
+        if keys is not None:
+            self.joy_keys = keys
+        if pad is not None:
+            self.joy_pad = pad
+        bits = self.joy_keys | self.joy_pad
+        if bits != self.joy:
+            self.joy = bits
+            self.send(encode_joy(bits))
 
     def keyboard_reset(self):
         """Ctrl-Amiga-Amiga enfoncés puis relâchés : la carte (kbd_amiga) émet $78 puis /RESET."""
@@ -203,6 +244,7 @@ class Remote:
         self.acc_x = self.acc_y = 0.0
         if self.lmb or self.rmb:
             self.buttons(False, False)
+        self.joystick(keys=0, pad=0)
 
 
 def main():
@@ -210,6 +252,8 @@ def main():
     ap.add_argument('--port', default='/dev/ttyACM0')
     ap.add_argument('--mouse-scale', type=float, default=1.0,
                     help='multiplicateur de vitesse souris (défaut 1.0)')
+    ap.add_argument('--joy-keys', action='store_true',
+                    help='flèches + Ctrl droit = joystick port 2 (au lieu du clavier Amiga)')
     ap.add_argument('--no-log', action='store_true', help="n'affiche pas les logs série de la carte")
     args = ap.parse_args()
 
@@ -222,11 +266,12 @@ def main():
     threading.Thread(target=log_reader, args=(ser, not args.no_log, stop), daemon=True).start()
 
     pygame.init()
-    screen = pygame.display.set_mode((560, 120))
+    screen = pygame.display.set_mode((560, 150))
     pygame.display.set_caption('Amiga VGA32 — entrée distante')
     font = pygame.font.Font(None, 26)
     remote = Remote(ser, args.mouse_scale)
     captured = False
+    pads = {}                    # instance_id -> manette ouverte
 
     def set_capture(on):
         nonlocal captured
@@ -242,9 +287,13 @@ def main():
 
     def draw():
         screen.fill((0, 85, 170) if captured else (40, 40, 40))
+        joy = ("joystick : manette" if pads else "") + (" + " if pads and args.joy_keys else "") + \
+              ("flèches/Ctrl droit" if args.joy_keys else "")
         lines = (["CAPTURÉ — clavier et souris vont à l'Amiga", "F12 pour libérer, F11 = Ctrl-Amiga-Amiga"]
                  if captured else
                  ["Cliquer ici pour capturer clavier + souris", f"port {args.port}"])
+        if joy:
+            lines.append(joy)
         for i, t in enumerate(lines):
             screen.blit(font.render(t, True, (255, 255, 255)), (16, 28 + 34 * i))
         pygame.display.flip()
@@ -257,6 +306,14 @@ def main():
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT:
                     running = False
+                elif ev.type == pygame.JOYDEVICEADDED:
+                    pad = pygame.joystick.Joystick(ev.device_index)
+                    pads[pad.get_instance_id()] = pad
+                    draw()
+                elif ev.type == pygame.JOYDEVICEREMOVED:
+                    pads.pop(ev.instance_id, None)
+                    remote.joystick(pad=0)
+                    draw()
                 elif not captured:
                     if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
                         set_capture(True)
@@ -267,10 +324,20 @@ def main():
                         draw()
                     elif ev.scancode == HID_F11:
                         remote.keyboard_reset()
+                    elif args.joy_keys and ev.scancode in JOY_KEYS:
+                        remote.joystick(keys=remote.joy_keys | JOY_KEYS[ev.scancode])
                     else:
                         remote.key(ev.scancode, True)
                 elif ev.type == pygame.KEYUP:
-                    remote.key(ev.scancode, False)
+                    if args.joy_keys and ev.scancode in JOY_KEYS:
+                        remote.joystick(keys=remote.joy_keys & ~JOY_KEYS[ev.scancode])
+                    else:
+                        remote.key(ev.scancode, False)
+                elif ev.type in (pygame.JOYAXISMOTION, pygame.JOYHATMOTION,
+                                 pygame.JOYBUTTONDOWN, pygame.JOYBUTTONUP):
+                    pad = pads.get(ev.instance_id)
+                    if pad is not None:
+                        remote.joystick(pad=pad_bits(pad))
                 elif ev.type == pygame.MOUSEMOTION:
                     remote.motion(*ev.rel)
                 elif ev.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP):

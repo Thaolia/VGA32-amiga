@@ -605,6 +605,23 @@ T8, `testcopper` (CDANG), `testdisk` (DSKSYN, cylindre 80). Toutes les sentinell
 KickSlopStart (PC) peu concluant : `--rdlog` ne journalise que les trames 140 à 180, où KickSlopStart
 ne lit pas POTGOR.
 
+### Lot B : entrées par l'UART
+
+1. **Clics souris perdus ou décalés** (gameport-v34 §4.2 et §6.1 : boutons échantillonnés une fois par
+   trame, sans mémoire). `serial_kbd` appliquait l'état des boutons dès la réception : un appui et un
+   relâchement reçus dans le même poll (probable à 15-40 fps) se perdaient, et un clic suivant un
+   grand mouvement arrivait avant la fin du mouvement étalé à 100 comptes par trame. File
+   `sp_mouse_*` dans `serial_proto` (pure, testée) : une transition de boutons occupe une trame à elle
+   seule, après le mouvement reçu avant elle ; 16 segments, au-delà l'état final prime.
+2. **Joystick port 2 sur la carte** (gameport-v34 §6.1 et §8) : le cœur le gérait, mais rien ne
+   l'alimentait hors du harnais PC. Trame `J` (1 octet, haut b0, bas b1, gauche b2, droite b3, fire b4)
+   → `input_set_joy`. `remote_input.py` : manette pygame pendant la capture, ou `--joy-keys`
+   (flèches + Ctrl droit ; F12 sert déjà à libérer la capture, d'où une option plutôt qu'une bascule).
+Tests : `tests/hal` (`test_serial_proto` 8-12 ; un mutant sans « transition seule dans sa trame » est
+détecté). `remote_input.py` : encodage `J` et lecture de la manette vérifiés hors fenêtre, démarrage
+vérifié sur un pty (SDL factice). Le chemin `serial_kbd.cpp` (ARDUINO) n'est pas couvert par les
+tests : non vérifié sur matériel.
+
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
 - `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au

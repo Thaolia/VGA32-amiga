@@ -132,7 +132,9 @@ python3 -m venv ~/.venvs/vga32-remote
 
 Clicking in the window captures keyboard + mouse (held keys, Ctrl/Alt/Amiga = Super,
 Insert = HELP); **F12** releases; **F11** sends Ctrl-Amiga-Amiga (keyboard reset: warm reboot,
-RAM kept, as on a real A500). Options: `--mouse-scale 1.5`, `--no-log` (hides serial logs).
+RAM kept, as on a real A500). A gamepad plugged into the PC drives the Amiga joystick (port 2:
+left stick or d-pad, button 0 = fire). Options: `--mouse-scale 1.5`, `--joy-keys` (arrows + right
+Ctrl = joystick instead of keys), `--no-log` (hides serial logs).
 Connecting does not reboot the board. A plain terminal (`pio device monitor`) can also type text
 (no mouse, no held keys). Can be disabled through `VGA32_SERIAL_KBD`.
 

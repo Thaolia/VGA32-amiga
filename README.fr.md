@@ -132,7 +132,9 @@ python3 -m venv ~/.venvs/vga32-remote
 
 Cliquer dans la fenêtre capture clavier + souris (touches maintenues, Ctrl/Alt/Amiga = Super,
 Inser = HELP) ; **F12** libère ; **F11** envoie Ctrl-Amiga-Amiga (reset clavier : redémarrage à
-chaud, RAM conservée, comme sur un vrai A500). Options : `--mouse-scale 1.5`, `--no-log` (masque les logs série).
+chaud, RAM conservée, comme sur un vrai A500). Une manette branchée au PC pilote le joystick
+Amiga (port 2 : stick gauche ou croix, bouton 0 = fire). Options : `--mouse-scale 1.5`,
+`--joy-keys` (flèches + Ctrl droit = joystick au lieu des touches), `--no-log` (masque les logs série).
 Se connecter ne reboote pas la carte. Un simple terminal (`pio device monitor`) permet aussi de
 taper du texte (sans souris ni maintien de touche). Désactivable via `VGA32_SERIAL_KBD`.
 

@@ -2,7 +2,7 @@
  *
  * Deux modes coexistent sur le même flux (démultiplexés par serial_proto) :
  *  - trames binaires de tools/remote_input.py : touches enfoncées/relâchées
- *    (rawcode exact, maintien et modificateurs inclus) + souris ;
+ *    (rawcode exact, maintien et modificateurs inclus) + souris + joystick port 2 ;
  *  - texte d'un terminal : caractères convertis en frappes Amiga (rawcode + Shift),
  *    injectées dans kbd_amiga (down puis up, entourés de Shift si nécessaire).
  * Réutilise toute la Phase 2 (encodage SDR + émulation série CIA-A).
@@ -77,9 +77,9 @@ void serial_kbd_poll(void)
 {
     static int esc = 0;   /* 0 = normal, 1 = ESC reçu, 2 = ESC[ reçu */
     static sp_parser_t parser = { 0, 0, 0, 0, { 0, 0, 0 } };
-    /* input.device lit un delta 8 bits par vblank : on cumule les trames souris
-     * reçues et on n'applique qu'un pas borné par trame émulée. */
-    static int pend_x = 0, pend_y = 0;
+    /* input.device lit un delta 8 bits et les boutons une fois par vblank : les trames souris
+     * passent par une file (serial_proto), un pas borné et une transition au plus par trame. */
+    static sp_mouse_t mouse = { {}, 0, 0, 0 };
 
     while (Serial.available() > 0) {
         int ci = Serial.read();
@@ -89,10 +89,11 @@ void serial_kbd_poll(void)
         if (!sp_feed(&parser, (uint8_t)ci, &ev)) continue;
         if (ev.kind == SP_KEY)   { kbd_amiga_push(ev.a, ev.down); continue; }
         if (ev.kind == SP_MOUSE) {
-            pend_x += ev.dx;
-            pend_y += ev.dy;
-            input_set_lmb(ev.lmb);
-            input_set_rmb(ev.rmb);
+            sp_mouse_push(&mouse, ev.dx, ev.dy, (uint8_t)(ev.lmb | (ev.rmb << 1)));
+            continue;
+        }
+        if (ev.kind == SP_JOY) {
+            input_set_joy(ev.a & 1, (ev.a >> 1) & 1, (ev.a >> 2) & 1, (ev.a >> 3) & 1, (ev.a >> 4) & 1);
             continue;
         }
         char c = (char)ev.a;
@@ -120,11 +121,14 @@ void serial_kbd_poll(void)
             emit(raw, shift);
     }
 
-    int sx = pend_x >  MOUSE_STEP_MAX ?  MOUSE_STEP_MAX
-           : pend_x < -MOUSE_STEP_MAX ? -MOUSE_STEP_MAX : pend_x;
-    int sy = pend_y >  MOUSE_STEP_MAX ?  MOUSE_STEP_MAX
-           : pend_y < -MOUSE_STEP_MAX ? -MOUSE_STEP_MAX : pend_y;
-    pend_x -= sx;
-    pend_y -= sy;
+    int sx, sy;
+    uint8_t btn;
+    static uint8_t btn_prev = 0;
+    sp_mouse_step(&mouse, MOUSE_STEP_MAX, &sx, &sy, &btn);
+    if (btn != btn_prev) {               /* sur changement seulement : la souris PS/2 règle aussi les boutons */
+        btn_prev = btn;
+        input_set_lmb(btn & 1);
+        input_set_rmb((btn >> 1) & 1);
+    }
     if (sx || sy) input_mouse_delta(sx, sy);
 }

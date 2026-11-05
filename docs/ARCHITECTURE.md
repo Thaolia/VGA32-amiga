@@ -73,10 +73,12 @@ Musashi 4.5, conf 68000-only, tables d'opcodes en forme pointeur allouées en PS
   désormais le registre + nouveau hook.
 - `serial_kbd.cpp` : **clavier + souris via port série USB (implémenté)** — octets de `Serial`
   démultiplexés par `serial_proto.cpp` : trames binaires de `tools/remote_input.py` (rawcode
-  exact → `kbd_amiga`, souris → `input_mouse_delta`/`input_set_lmb/rmb`, bornage ±100/trame) ;
+  exact → `kbd_amiga` ; souris → file `sp_mouse_*` puis `input_mouse_delta`/`input_set_lmb/rmb`,
+  ±100 par trame et une transition de boutons au plus par trame, après le mouvement reçu avant
+  elle ; trame `J` → `input_set_joy`, joystick port 2) ;
   octets hors trame = mode texte (table ASCII→rawcode US + ESC[ → `kbd_amiga`). En parallèle du PS/2.
-- `serial_proto.cpp` : décodeur pur (sans Arduino) des trames `0xA5 TYPE PAYLOAD CHK`, testé hôte
-  dans `tests/hal/`.
+- `serial_proto.cpp` : décodeur pur (sans Arduino) des trames `0xA5 TYPE PAYLOAD CHK` (`K`, `M`,
+  `J`) et file souris `sp_mouse_*`, testés hôte dans `tests/hal/`.
 - `audio_dac.cpp` : **audio (P3, implémenté)** — `WaveformGenerator` custom → ring Paula
   (`paula_ring_pop`, 44100 Hz) downmixé mono 8 bits → `SoundGenerator` DAC GPIO25. Démarré depuis
   `emu_task` après `paula_reset`.

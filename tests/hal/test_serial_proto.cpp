@@ -73,6 +73,53 @@ int main(void)
     CHECK(feed(&p, two, 8, ev, 8) == 2);
     CHECK(ev[0].down == 1 && ev[1].down == 0);
 
+    /* 8. joystick port 2 : haut + gauche + fire = 0x01 | 0x04 | 0x10 */
+    sp_init(&p);
+    const uint8_t jy[] = { 0xA5, 'J', 0x15, (uint8_t)('J' + 0x15) };
+    CHECK(feed(&p, jy, 4, ev, 8) == 1);
+    CHECK(ev[0].kind == SP_JOY && ev[0].a == 0x15);
+    const uint8_t jbad[] = { 0xA5, 'J', 0x15, 0x00, 'c' };
+    CHECK(feed(&p, jbad, 5, ev, 8) == 1);
+    CHECK(ev[0].kind == SP_ASCII && ev[0].a == 'c');
+
+    /* 9. file souris : appui et relâchement reçus dans le même poll -> deux trames émulées */
+    sp_mouse_t m;
+    int dx, dy;
+    uint8_t btn;
+    sp_mouse_init(&m);
+    sp_mouse_push(&m, 0, 0, 1);
+    sp_mouse_push(&m, 0, 0, 0);
+    sp_mouse_step(&m, 100, &dx, &dy, &btn);
+    CHECK(btn == 1 && dx == 0 && dy == 0);
+    sp_mouse_step(&m, 100, &dx, &dy, &btn);
+    CHECK(btn == 0);
+
+    /* 10. clic après un grand mouvement : appliqué une fois le mouvement fini (bon endroit) */
+    sp_mouse_init(&m);
+    sp_mouse_push(&m, 120, -40, 0);
+    sp_mouse_push(&m, 130, 0, 0);                  /* même état de boutons : cumulé */
+    sp_mouse_push(&m, 0, 0, 2);                    /* bouton droit */
+    sp_mouse_push(&m, 5, 5, 2);                    /* mouvement après le clic */
+    int sx = 0, sy = 0, pressed_at = -1;
+    for (int f = 0; f < 6; f++) {
+        sp_mouse_step(&m, 100, &dx, &dy, &btn);
+        CHECK(dx >= -100 && dx <= 100 && dy >= -100 && dy <= 100);
+        if (btn == 2 && pressed_at < 0) { pressed_at = f; CHECK(sx == 250 && sy == -40); }
+        sx += dx; sy += dy;
+    }
+    CHECK(pressed_at >= 0 && sx == 255 && sy == -35 && btn == 2);
+
+    /* 11. file vide : rien ne bouge, l'état des boutons reste */
+    sp_mouse_step(&m, 100, &dx, &dy, &btn);
+    CHECK(dx == 0 && dy == 0 && btn == 2);
+
+    /* 12. file pleine : pas de débordement, l'état final des boutons est gardé */
+    sp_mouse_init(&m);
+    for (int i = 0; i < 100; i++) sp_mouse_push(&m, 1, 0, (uint8_t)(i & 1));
+    sx = 0;
+    for (int f = 0; f < 200; f++) { sp_mouse_step(&m, 100, &dx, &dy, &btn); sx += dx; }
+    CHECK(sx == 100 && btn == 1);
+
     if (fails) { printf("%d echec(s)\n", fails); return 1; }
     printf("serial_proto : OK\n");
     return 0;

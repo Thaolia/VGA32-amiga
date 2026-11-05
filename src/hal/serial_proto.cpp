@@ -27,6 +27,7 @@ int sp_feed(sp_parser_t *p, uint8_t b, sp_event_t *ev)
     case ST_TYPE:
         if      (b == 'K') p->len = 1;
         else if (b == 'M') p->len = 3;
+        else if (b == 'J') p->len = 1;
         else { p->state = ST_IDLE; return 0; }   /* type inconnu : trame abandonnée */
         p->type = b;
         p->n = 0;
@@ -47,6 +48,9 @@ int sp_feed(sp_parser_t *p, uint8_t b, sp_event_t *ev)
             ev->kind = SP_KEY;
             ev->a = p->buf[0] & 0x7F;
             ev->down = (p->buf[0] & 0x80) ? 0 : 1;
+        } else if (p->type == 'J') {
+            ev->kind = SP_JOY;
+            ev->a = p->buf[0] & 0x1F;
         } else {
             ev->kind = SP_MOUSE;
             ev->dx = (int8_t)p->buf[0];
@@ -59,4 +63,47 @@ int sp_feed(sp_parser_t *p, uint8_t b, sp_event_t *ev)
     }
     p->state = ST_IDLE;
     return 0;
+}
+
+void sp_mouse_init(sp_mouse_t *m)
+{
+    m->head = m->n = 0;
+    m->btn = 0;
+}
+
+static sp_mseg_t *mq_at(sp_mouse_t *m, int i) { return &m->q[(m->head + i) % SP_MQ]; }
+
+void sp_mouse_push(sp_mouse_t *m, int dx, int dy, uint8_t btn)
+{
+    if (m->n == 0) {                              /* segment courant, sans transition */
+        sp_mseg_t *s = mq_at(m, 0);
+        s->btn = m->btn; s->dx = s->dy = 0;
+        m->n = 1;
+    }
+    sp_mseg_t *t = mq_at(m, m->n - 1);
+    t->dx += dx;
+    t->dy += dy;
+    if (btn == t->btn) return;
+    if (m->n == SP_MQ) { t->btn = btn; return; }  /* file pleine : l'état final prime */
+    sp_mseg_t *s = mq_at(m, m->n);
+    s->btn = btn; s->dx = s->dy = 0;
+    m->n++;
+}
+
+static int clamp(int v, int lim) { return v > lim ? lim : (v < -lim ? -lim : v); }
+
+void sp_mouse_step(sp_mouse_t *m, int step, int *dx, int *dy, uint8_t *btn)
+{
+    *dx = *dy = 0;
+    while (m->n > 0) {
+        sp_mseg_t *h = mq_at(m, 0);
+        if (h->btn != m->btn) { m->btn = h->btn; break; }   /* transition : seule dans sa trame */
+        *dx = clamp(h->dx, step);
+        *dy = clamp(h->dy, step);
+        h->dx -= *dx;
+        h->dy -= *dy;
+        if (h->dx == 0 && h->dy == 0) { m->head = (uint8_t)((m->head + 1) % SP_MQ); m->n--; }
+        if (*dx || *dy) break;
+    }
+    *btn = m->btn;
 }
