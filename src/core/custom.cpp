@@ -249,11 +249,17 @@ void custom_write(uint32_t off, uint16_t v)
         if (off & 2) bpl_pt[p] = (bpl_pt[p] & 0xFFFF0000u) | v;
         else         bpl_pt[p] = (bpl_pt[p] & 0x0000FFFFu) | ((uint32_t)v << 16);
     }
-    /* SPRxPTL (0x122,0x12A,...,0x13E): il write della parola bassa arma il canale */
-    if (off==0x122||off==0x12A||off==0x132||off==0x13A||
-        off==0x126||off==0x12E||off==0x136||off==0x13E) {
+    /* Portage VGA32 : SPRxPOS/SPRxCTL ($140 + 8n, $142 + 8n) positionnent le canal */
+    if (off >= 0x140 && off < 0x180 && !(off & 4)) {
         regs[off >> 1] = v;
-        sprite_arm((int)((off - 0x122) / 8));
+        sprite_posctl((int)((off - 0x140) >> 3));
+        return;
+    }
+    /* SPRxPTL (0x122,0x126,...,0x13E): il write della parola bassa arma il canale ; portage
+     * VGA32 : pointeurs espacés de 4 octets (l'index /8 armait le mauvais canal, jamais 4-7) */
+    if (off >= 0x122 && off <= 0x13E && (off & 3) == 2) {
+        regs[off >> 1] = v;
+        sprite_arm((int)((off - 0x120) >> 2));
         return;
     }
     regs[off >> 1] = v;

@@ -85,6 +85,9 @@ testsprite: a500
 	python3 test/mkrom_sprite.py test/testrom_sprite.bin
 	./a500 test/testrom_sprite.bin 5 --ppm test_sprite.ppm > /dev/null
 	python3 test/check_sprite.py test_sprite.ppm
+	python3 test/mkrom_sprite_vs.py test/testrom_sprite_vs.bin
+	./a500 test/testrom_sprite_vs.bin 5 --ppm test_sprite_vs.ppm > /dev/null
+	python3 test/check_sprite_vs.py test_sprite_vs.ppm
 
 testscroll: a500
 	python3 test/mkrom_scroll.py test/testrom_scroll.bin

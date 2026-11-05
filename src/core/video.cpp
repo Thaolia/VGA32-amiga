@@ -330,6 +330,23 @@ void sprite_arm(int n)   /* chiamata al write di SPRxPTL */
     spr[n].state = SPR_FETCH;
 }
 
+static inline void sprite_posctl_decode(int n, uint16_t pos, uint16_t ctl)
+{
+    spr[n].vstart = (pos >> 8) | ((ctl & 0x04) << 6);          /* +E8 come bit 8 */
+    spr[n].vstop  = (ctl >> 8) | ((ctl & 0x02) << 7);
+    spr[n].hstart = ((pos & 0xFF) << 1) | (ctl & 0x01);
+    spr[n].att = (ctl >> 7) & 1;
+}
+
+/* Portage VGA32 : écriture de SPRxPOS ou SPRxCTL (copper des VSprites, parking par graphics) :
+ * le canal part de ces registres et le DMA lira les données au pointeur, sans en-tête
+ * (graphics-gels-v34 §5.8). Annule le fetch d'en-tête posé par SPRxPTL sur la même ligne. */
+void sprite_posctl(int n)
+{
+    sprite_posctl_decode(n, custom_get(0x140 + n * 8), custom_get(0x142 + n * 8));
+    spr[n].state = SPR_WAIT;
+}
+
 void sprite_vblank(void)  /* inizio frame */
 {
     for (int i = 0; i < 8; i++)
@@ -349,10 +366,7 @@ static void sprite_dma_line(void)
             uint16_t pos = spr_rd16(spr[i].pc), ctl = spr_rd16(spr[i].pc + 2);
             spr[i].pc += 4;
             if (pos == 0 && ctl == 0) { spr[i].state = SPR_OFF; continue; }
-            spr[i].vstart = (pos >> 8) | ((ctl & 0x04) << 6);          /* +E8 come bit 8 */
-            spr[i].vstop  = (ctl >> 8) | ((ctl & 0x02) << 7);
-            spr[i].hstart = ((pos & 0xFF) << 1) | (ctl & 0x01);
-            spr[i].att = (ctl >> 7) & 1;
+            sprite_posctl_decode(i, pos, ctl);
             spr[i].state = SPR_WAIT;
         }
         if (spr[i].state == SPR_WAIT && vpos == spr[i].vstart)
@@ -364,10 +378,7 @@ static void sprite_dma_line(void)
                 uint16_t pos = spr_rd16(spr[i].pc), ctl = spr_rd16(spr[i].pc + 2);
                 spr[i].pc += 4;
                 if (pos == 0 && ctl == 0) { spr[i].state = SPR_OFF; continue; }
-                spr[i].vstart = (pos >> 8) | ((ctl & 0x04) << 6);
-                spr[i].vstop  = (ctl >> 8) | ((ctl & 0x02) << 7);
-                spr[i].hstart = ((pos & 0xFF) << 1) | (ctl & 0x01);
-                spr[i].att = (ctl >> 7) & 1;
+                sprite_posctl_decode(i, pos, ctl);
                 spr[i].state = (vpos == spr[i].vstart) ? SPR_ACTIVE : SPR_WAIT;
                 if (spr[i].state != SPR_ACTIVE) continue;
             }

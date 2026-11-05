@@ -622,6 +622,21 @@ détecté). `remote_input.py` : encodage `J` et lecture de la manette vérifiés
 vérifié sur un pty (SDL factice). Le chemin `serial_kbd.cpp` (ARDUINO) n'est pas couvert par les
 tests : non vérifié sur matériel.
 
+### Lot C : sprites
+
+1. **Bug de l'upstream : SPRxPTL armait le mauvais canal.** L'index valait `(off - $122) / 8` alors que
+   les pointeurs sont espacés de 4 octets : SPR1PTL réarmait le sprite 0, SPR2PTL le sprite 1, etc., et
+   **les sprites 4 à 7 n'étaient jamais armés** (copinit écrivant les 8 pointeurs à chaque trame, les
+   sprites 0-3 s'affichaient quand même). Trouvé en écrivant le test des VSprites.
+2. **SPRxPOS/SPRxCTL écrits** (graphics-gels-v34 §5.8 : le copper des VSprites fait PTH, PTL vers les
+   données sans en-tête, POS, CTL) : `sprite_posctl` décode VSTART/VSTOP/HSTART/ATT depuis les registres
+   et met le canal en attente de VSTART, ce qui annule le fetch d'en-tête posé par PTL. L'ancien code
+   prenait la première ligne d'image pour POS/CTL. graphics n'écrit ces registres au CPU qu'une fois, à
+   l'init (parking `$FE00`/`$FF00`, custom-chips-v34 §4.1).
+Test : `testsprite`, 2e ROM (`mkrom_sprite_vs.py`) : sprite 1 positionné par le copper (POS/CTL),
+sprite 5 classique armé par SPR5PTL ; l'ancien code échoue sur les deux. Chemin commun PC/carte.
+**Écarté** : sprites manuels (SPRxDATA écrit au CPU, DMA coupé) : KS ne les utilise pas.
+
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
 - `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au

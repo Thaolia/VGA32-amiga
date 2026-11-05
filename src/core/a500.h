@@ -92,6 +92,7 @@ void paula_write(uint32_t off, uint16_t v);
 void paula_set_dma(uint16_t dmacon);
 int  paula_ring_pop(int16_t *l, int16_t *r);
 void sprite_arm(int n);
+void sprite_posctl(int n);           /* écriture de SPRxPOS/SPRxCTL (portage VGA32) */
 void sprite_vblank(void);
 #ifdef ARDUINO
 extern void (*denise_line_cb)(int vpos, const uint16_t *pixels, int w);
