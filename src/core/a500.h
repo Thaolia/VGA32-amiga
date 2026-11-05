@@ -134,6 +134,7 @@ void    drive_set_write_protect(int on); /* portage VGA32 : 1 = /WPRO actif (dé
 
 /* ---- disco: MFM + DMA (disk.cpp) ---- */
 void disk_dsklen_write(uint16_t v);
+uint16_t disk_dskbytr(void);         /* DSKBYTR calculé à la lecture (portage VGA32) */
 extern int disk_irq_pending;         /* DSKBLK differito di una linea */
 void disk_line_tick(void);           /* rotation d'une ligne + impulsion d'index (portage VGA32) */
 void disk_track_invalidate(void);    /* portage VGA32 : piste MFM à reconstruire (disque changé) */

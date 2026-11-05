@@ -223,13 +223,26 @@ static int track_commit(int track)
     return ok;
 }
 
+static uint16_t s_dsklen_last;        /* dernière valeur écrite dans DSKLEN (DSKBYTR DISKWRITE) */
+static int s_dma_wait;                /* DMA armé qui attend un sync ou un flux (DSKBYTR DMAON) */
+
+/* Portage VGA32 (docs/FLOPPY_SPEC.md §B4) : DSKPT avance de 2 octets par mot transféré */
+static void dskpt_advance(uint32_t pt, int len)
+{
+    const uint32_t np = (pt + 2u * (uint32_t)len) & 0x7FFFE;
+    custom_set_latch(0x020, (uint16_t)(np >> 16));
+    custom_set_latch(0x022, (uint16_t)np);
+}
+
 /* chiamata dal latch DSKLEN in custom.cpp */
 void disk_dsklen_write(uint16_t v)
 {
     static int armed = 0;
-    if (!(v & 0x8000)) { armed = 0; return; }
+    s_dsklen_last = v;
+    if (!(v & 0x8000)) { armed = 0; s_dma_wait = 0; return; }
     if (!armed) { armed = 1; return; }
     armed = 0;
+    s_dma_wait = 0;
 
     int len = v & 0x3FFF;                                 /* in word       */
     uint32_t pt = (((uint32_t)custom_get(0x020) << 16) | custom_get(0x022)) & 0x7FFFE;
@@ -239,6 +252,7 @@ void disk_dsklen_write(uint16_t v)
          * moteur arrêté ou protégé : la tête n'écrit rien, le DMA se termine quand même. */
         if (!drive_adf() || !drive_motor_on() || drive_write_protected() || len <= 1) {
             logmsg("[DSK] scrittura ignorata (%s)\n", len <= 1 ? "len <= 1" : "disco assente, motore fermo o protetto");
+            dskpt_advance(pt, len);
             disk_irq_pending = 1;
             return;
         }
@@ -253,6 +267,7 @@ void disk_dsklen_write(uint16_t v)
         const int ok = track_commit(track);
         logmsg("[DSK] scrittura traccia %d: %d word, settori validi %03X%s\n", track, len, ok,
                ok == (1 << NSEC) - 1 ? " -> ADF" : " (ADF invariato)");
+        dskpt_advance(pt, len);
         disk_irq_pending = 1;
         return;
     }
@@ -261,6 +276,7 @@ void disk_dsklen_write(uint16_t v)
          * au bout (trackdisk 1.3 attend DSKBLK sans délai maximal) ; avec WORDSYNC il ne finit pas. */
         if (adkcon & 0x0400) {
             logmsg("[DSK] lettura senza disco/motore (WORDSYNC): DMA in attesa\n");
+            s_dma_wait = 1;
             return;
         }
         for (int k = 0; k < len; k++) {
@@ -268,6 +284,7 @@ void disk_dsklen_write(uint16_t v)
             chip_ram[(pt + 2u * (uint32_t)k + 1u) & 0x7FFFF] = 0;
         }
         logmsg("[DSK] lettura senza disco/motore: %d word nulle -> %05X, DSKBLK\n", len, pt);
+        dskpt_advance(pt, len);
         disk_irq_pending = 1;
         return;
     }
@@ -283,6 +300,7 @@ void disk_dsklen_write(uint16_t v)
         while (i <= REV_WORDS && rev_word((w + i) % REV_WORDS) != sync) i++;
         if (i > REV_WORDS) {
             logmsg("[DSK] WORDSYNC : sync %04X absent de la piste %d, DMA en attente\n", sync, track);
+            s_dma_wait = 1;
             return;
         }
         w = (w + i + 1) % REV_WORDS;
@@ -294,5 +312,28 @@ void disk_dsklen_write(uint16_t v)
     }
     logmsg("[DSK] lettura traccia %d (cil %d lato %d): %d word -> %05X, DSKBLK\n",
            track, drive_track(), drive_side(), len, pt);
+    dskpt_advance(pt, len);
     disk_irq_pending = 1;                                 /* DSKBLK differito */
+}
+
+/* Portage VGA32 (docs/FLOPPY_SPEC.md §C) : DSKBYTR calculé à la lecture depuis la position de
+ * rotation. DATA = dernier octet passé sous la tête ; DSKBYTE = un octet nouveau depuis la lecture
+ * précédente ; DMAON = DMA en attente ET DMAEN + DSKEN ; DISKWRITE = bit 14 du dernier DSKLEN ;
+ * WORDEQUAL = mot sous la tête égal à DSKSYNC. Sans flux (lecteur arrêté, vide), DATA et
+ * DSKBYTE restent à 0. */
+uint16_t disk_dskbytr(void)
+{
+    static uint32_t last_byte = 0xFFFFFFFFu;
+    uint16_t v = 0;
+    if (drive_selected() && drive_motor_on() && drive_adf()) {
+        const int track = drive_track() * 2 + drive_side();
+        if (rev_track != track) build_revolution(track);
+        const uint32_t cap = ((s_rot32 >> 4) + REV_BYTES - 1) % REV_BYTES;
+        v = rev[cap];
+        if (cap != last_byte) { v |= 0x8000; last_byte = cap; }
+        if (rev_word(head_word()) == custom_get(0x07E)) v |= 0x1000;
+    }
+    if (s_dma_wait && (dmacon & 0x0210) == 0x0210) v |= 0x4000;
+    if (s_dsklen_last & 0x4000) v |= 0x2000;
+    return v;
 }

@@ -637,6 +637,30 @@ Test : `testsprite`, 2e ROM (`mkrom_sprite_vs.py`) : sprite 1 positionné par le
 sprite 5 classique armé par SPR5PTL ; l'ancien code échoue sur les deux. Chemin commun PC/carte.
 **Écarté** : sprites manuels (SPRxDATA écrit au CPU, DMA coupé) : KS ne les utilise pas.
 
+### Lot D : disque, pour les trackloaders
+
+- **DSKBYTR** (FLOPPY_SPEC §C) : lisait toujours 0. `disk_dskbytr` le calcule à la lecture : dernier
+  octet passé sous la tête, DSKBYTE (octet nouveau depuis la lecture précédente), DMAON (DMA armé en
+  attente de sync ou de flux, avec DMAEN + DSKEN), DISKWRITE (bit 14 du dernier DSKLEN), WORDEQUAL (mot
+  sous la tête égal à DSKSYNC). Sans flux, DATA et DSKBYTE restent à 0. Lu par certains chargeurs et
+  protections, jamais par trackdisk.
+- **DSKPT avancé** de 2 octets par mot en fin de DMA (FLOPPY_SPEC §B4), en lecture comme en écriture,
+  y compris quand l'écriture est ignorée (disque protégé : le DMA lit quand même la mémoire).
+Tests : `testdisk` (DSKPT après lecture, avec retenue sur le mot haut et après écriture protégée ;
+DSKBYTR : DSKBYTE effacé par la lecture, WORDEQUAL sur le 1er $4489, pas de flux moteur arrêté,
+DMAON, DISKWRITE).
+
+### Vérification de la passe
+
+- PC : les 16 sentinelles sont vertes. `testboot` et `testmfm` n'ont pas tourné (pas de
+  `kick34005.A500` ni de `wb13.adf` dans `tests/pc/`). KickSlopStart v0.2.1, 1 500 trames sur PC :
+  écran identique octet pour octet à celui d'avant la passe (commit 7d18e84).
+- HAL : `make -C tests/hal test` vert. Cible : `ttgo-vga32` et `ttgo-vga32-kss-kickonly` compilent
+  sans warning.
+- **Non vérifié sur matériel** (carte non branchée pendant la session) : temps de trame après les
+  lots A (DSKSYN par ligne, moteur en marche) et C (sprites 4-7 désormais armés), clic droit dans le
+  Workbench, file souris, joystick.
+
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
 - `default_envs = ttgo-vga32-kss-kickonly` : KickSlopStart (dernière release, v0.2.1 au

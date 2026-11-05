@@ -1,7 +1,8 @@
 /* test_disk_c.cpp — Tests du DMA disque (core/disk.cpp) avec des stubs à la place du lecteur,
  * de Agnus et de la chip RAM : position de rotation et WORDSYNC (docs/FLOPPY_SPEC.md §A3, A4,
  * B5, B6, B12, F1) ; écriture d'une piste et reconversion en ADF (§E), avec un encodeur MFM
- * propre au test ; interruption DSKSYN (§B7) ; cylindres 80-83 au-delà de l'ADF (§D6). */
+ * propre au test ; interruption DSKSYN (§B7) ; cylindres 80-83 au-delà de l'ADF (§D6) ; DSKPT
+ * avancé par le DMA (§B4) ; DSKBYTR (§C). */
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
@@ -14,6 +15,8 @@ uint16_t intena, intreq, dmacon, adkcon;
 int vpos, hpos, cur_frame;
 static uint16_t s_regs[0x100];
 uint16_t custom_get(uint32_t off) { return s_regs[off >> 1]; }
+void custom_set_latch(uint32_t off, uint16_t v) { s_regs[off >> 1] = v; }
+static uint32_t dskpt(void) { return (uint32_t)s_regs[0x020 >> 1] << 16 | s_regs[0x022 >> 1]; }
 static uint8_t s_adf[901120];
 static int s_nodisk = 0;
 const uint8_t *drive_adf(void) { return s_nodisk ? nullptr : s_adf; }
@@ -51,6 +54,7 @@ static int read_at(int frame, int line, uint16_t len)
     memset(chip_ram, 0, 0x10000);
     seek_time(frame, line);
     disk_irq_pending = 0;
+    s_regs[0x020 >> 1] = s_regs[0x022 >> 1] = 0;          /* DSKPT = 0 (le DMA l'avance) */
     disk_dsklen_write(0x8000 | len);
     disk_dsklen_write(0x8000 | len);
     return disk_irq_pending;
@@ -161,6 +165,7 @@ int main(void)
     adkcon = 0;
     memset(chip_ram, 0xEE, 0x10000);
     seek_time(0, 0); disk_irq_pending = 0;
+    s_regs[0x020 >> 1] = s_regs[0x022 >> 1] = 0;
     disk_dsklen_write(0x8000 | 100); disk_dsklen_write(0x8000 | 100);
     CHECK(disk_irq_pending == 1);
     CHECK(w16(0) == 0 && w16(198) == 0 && w16(200) == 0xEEEE);
@@ -255,6 +260,7 @@ int main(void)
     adkcon = 0;
     memset(chip_ram, 0xEE, 0x10000);
     seek_time(0, 0); disk_irq_pending = 0;
+    s_regs[0x020 >> 1] = s_regs[0x022 >> 1] = 0;
     disk_dsklen_write(0x8000 | 100); disk_dsklen_write(0x8000 | 100);
     CHECK(disk_irq_pending == 1 && w16(0) == 0 && w16(198) == 0);
     adkcon = 0x0400;
@@ -267,6 +273,53 @@ int main(void)
     CHECK(disk_irq_pending == 1 && memcmp(adf_copy, s_adf, sizeof s_adf) == 0);
     s_cyl = 0;
     disk_track_invalidate();
+
+    /* DSKPT (§B4) : avancé de 2 octets par mot transféré, en lecture comme en écriture */
+    adkcon = 0;
+    CHECK(read_at(0, 0, 100) == 1 && dskpt() == 200);
+    s_regs[0x020 >> 1] = 0x0001; s_regs[0x022 >> 1] = 0xFFFE;
+    disk_dsklen_write(0x8000 | 3); disk_dsklen_write(0x8000 | 3);
+    CHECK(dskpt() == 0x20004);
+    build_track(0, 0, data, -1);
+    s_wp = 1;                                          /* protégé : rien d'écrit, DMA quand même */
+    seek_time(0, 0);
+    s_regs[0x020 >> 1] = 0x0002; s_regs[0x022 >> 1] = 0x0000;
+    disk_dsklen_write((uint16_t)(0xC000 | 10)); disk_dsklen_write((uint16_t)(0xC000 | 10));
+    CHECK(dskpt() == 0x20014);
+    s_wp = 0;
+
+    /* DSKBYTR (§C) */
+    disk_track_invalidate();
+    adkcon = 0; s_regs[0x07E >> 1] = 0x4489; dmacon = 0x0210;
+    seek_time(0, 0);
+    uint16_t b1 = disk_dskbytr(), b2 = disk_dskbytr();
+    CHECK((b1 & 0x8000) && !(b2 & 0x8000));            /* DSKBYTE : 1 puis effacé par la lecture */
+    CHECK(b1 & 0x2000);                                /* DISKWRITE : dernier DSKLEN = l'écriture protégée */
+    CHECK(!(b1 & 0x1000));                             /* mot 0 = $AAAA, pas DSKSYNC */
+    disk_line_tick();                                  /* tête sur le mot 2 = 1er $4489 */
+    uint16_t b3 = disk_dskbytr();
+    CHECK((b3 & 0x8000) && (b3 & 0x1000));             /* nouvel octet ; WORDEQUAL */
+    CHECK((b3 & 0xFF) == 0x89 || (b3 & 0xFF) == 0x44 || (b3 & 0xFF) == 0xAA);
+    s_motor = 0;
+    disk_line_tick(); disk_dskbytr();
+    disk_line_tick();
+    CHECK(!(disk_dskbytr() & 0x9000));                 /* moteur arrêté : pas de flux */
+    s_motor = 1;
+    /* DMAON : DMA armé en attente de sync (sync absent) ET DMAEN + DSKEN */
+    adkcon = 0x0400; s_regs[0x07E >> 1] = 0x1234;
+    CHECK(read_at(0, 0, 600) == 0);
+    CHECK(disk_dskbytr() & 0x4000);
+    dmacon = 0x0200;
+    CHECK(!(disk_dskbytr() & 0x4000));
+    dmacon = 0x0210;
+    disk_dsklen_write(0x4000);                         /* bit 15 à 0 : DMA coupé */
+    CHECK(!(disk_dskbytr() & 0x4000));
+    s_regs[0x07E >> 1] = 0x4489; adkcon = 0;
+    /* DISKWRITE : bit 14 du dernier DSKLEN écrit */
+    disk_dsklen_write(0x4000);
+    CHECK(disk_dskbytr() & 0x2000);
+    disk_dsklen_write(0x0000);
+    CHECK(!(disk_dskbytr() & 0x2000));
 
     printf("disk : %s\n", fails ? "ECHEC" : "OK");
     return fails ? 1 : 0;

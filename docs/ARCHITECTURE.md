@@ -43,7 +43,8 @@ par Denise à leur position. Denise : simple/double playfield, EHB, HAM, priorit
 attachés, fenêtre DIW verticale et horizontale ; en entrelacé, seule la trame longue est affichée.
 Sprites : écrire SPRxPTL arme le canal x (lecture de l'en-tête POS/CTL en mémoire) ; écrire SPRxPOS ou
 SPRxCTL (copper des VSprites) positionne le canal sans en-tête (`sprite_posctl`).
-Lecteur (`disk.cpp`) : lecture et écriture DMA sur une piste MFM circulaire ; une piste écrite aux
+Lecteur (`disk.cpp`) : lecture et écriture DMA sur une piste MFM circulaire (DSKPT avancé en fin
+de DMA, DSKBYTR calculé à la lecture par `disk_dskbytr`) ; une piste écrite aux
 11 secteurs valides est recopiée dans l'ADF en PSRAM (`VGA32_DISK_WRITE`, pas de persistance SD).
 
 ### CPU — `third_party/musashi/`

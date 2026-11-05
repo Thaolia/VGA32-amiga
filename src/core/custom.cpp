@@ -127,7 +127,7 @@ static uint16_t custom_read_inner(uint32_t off)
         return (uint16_t)(((vpos & 0xFF) << 8) | (hpos & 0xFF));
     }
     case 0x010: return adkcon & 0x7FFF;                 /* ADKCONR */
-    case 0x01A: return 0x0000;                          /* DSKBYTR: nessun dato disco */
+    case 0x01A: return disk_dskbytr();                  /* DSKBYTR (portage VGA32, FLOPPY_SPEC §C) */
     case 0x01C: return intena & 0x7FFF;                 /* INTENAR */
     case 0x01E: return intreq & 0x7FFF;                 /* INTREQR */
     case 0x00A: return input_joy0dat();                 /* JOY0DAT: contatori mouse */

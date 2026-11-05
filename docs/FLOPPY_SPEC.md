@@ -28,13 +28,14 @@ d'implémentation de WinUAE, libre ; **[?]** = incertain.
 | A4 | Index une fois par révolution → CIA-B /FLG | **fait** (2026-10-27) |
 | D6 | Pas au-delà de la piste 79 | **fait** (2026-11-05) : butée au cylindre 83, cylindres 80-83 sans flux (lecture à zéro, pas de sync), écriture sans effet sur l'ADF |
 | B9, B10, B3 | Abandon (bit 15 à 0), mise à jour de longueur, len = 0, DMA suspendu sans DMAEN/DSKEN | à faire |
-| C | DSKBYTR complet | à faire |
+| C | DSKBYTR complet | **fait** (2026-11-05) : calculé à la lecture depuis la position de rotation (octet, DSKBYTE, DMAON, DISKWRITE, WORDEQUAL) |
+| B4 | DSKPT avancé par le DMA | **fait** (2026-11-05) : +2 par mot en fin de DMA, lecture et écriture |
 | D | Délai /RDY, moteur latché sur /SEL, /CHNG, DF1-3 absents | partiel (voir `drive.cpp`) |
 | E | Écriture DMA + décodage AmigaDOS + validation tout ou rien | **fait** (2026-10-29) : syncs cherchés alignés sur les mots, sans mot 0x5555 ajouté [WU], ADF en PSRAM seulement (`VGA32_DISK_WRITE`) |
 
 Tests : `tests/pc`, `make testdisk` (stubs, sans ROM ni ADF) : position de rotation, WORDSYNC,
 sync absent, écriture d'une piste (tout ou rien, disque protégé), changement de disque, DSKSYN,
-cylindre 80. `make testregs` : butée de la tête (90 pas vers l'intérieur, 83 pour revenir à /TK0).
+cylindre 80, DSKPT après DMA, DSKBYTR. `make testregs` : butée de la tête (90 pas vers l'intérieur, 83 pour revenir à /TK0).
 
 ## A. Timing du flux disque
 
@@ -189,7 +190,7 @@ CIA-B PRB : bit 7 /MTR, bits 6-3 /SEL3-/SEL0 (bit 3 = DF0), bit 2 /SIDE, bit 1 /
 4. Interruption DSKSYNC. Impact moyen, coût faible. **Fait.**
 5. Index → CIA-B /FLG. Impact moyen, coût faible (entrée /FLG à ajouter au CIA). **Fait.**
 6. Cas limites DSKLEN/DMACON (B3, B9, B10). Impact moyen, coût faible.
-7. DSKBYTR complet. Impact faible à moyen, coût faible à moyen.
+7. DSKBYTR complet. Impact faible à moyen, coût faible à moyen. **Fait.**
 8. Lignes d'état (/RDY, moteur latché, /CHNG, DF1-3 absents). Impact moyen pour le changement de disque.
 9. Écriture DMA + décodage + validation (sauvegardes, Workbench). Coût moyen à élevé ; persistance à part.
 10. Fidélité au bit (alignement arbitraire, aléas, gigue, FAST = 0, MSBSYNC). Impact faible pour l'ADF.
