@@ -42,6 +42,7 @@ static uint32_t head_word(void) { return s_rot32 / 32u; }
 
 static void build_revolution(int track);
 static inline uint16_t rev_word(uint32_t w);
+#define SETTLE_LINES 240              /* 15 ms de stabilisation à 64 µs par ligne */
 
 void disk_line_tick(void)
 {
@@ -55,7 +56,12 @@ void disk_line_tick(void)
     /* Portage VGA32 (docs/FLOPPY_SPEC.md §B7) : DSKSYN (INTREQ bit 12) à chaque mot égal à DSKSYNC
      * qui passe sous la tête, avec ou sans DMA ; inhibé en MSBSYNC (ADKCON bit 9, GCR). */
     if (!spin || (adkcon & 0x0200)) return;
+    /* Tête stabilisée (≈ 15 ms après un pas, FLOPPY_SPEC D6) : pendant un seek, pas de sync lu et
+     * pas de piste MFM reconstruite à chaque pas (≈ 12 Ko encodés bit à bit). */
+    static int s_trk_seen = -1, s_settle = 0;
     const int track = drive_track() * 2 + drive_side();
+    if (track != s_trk_seen) { s_trk_seen = track; s_settle = 0; }
+    if (s_settle < SETTLE_LINES) { s_settle++; return; }
     if (rev_track != track) build_revolution(track);
     const uint16_t sync = custom_get(0x07E);
     const uint32_t n = (head_word() + REV_WORDS - from) % REV_WORDS;   /* mots passés : 2 ou 3 */

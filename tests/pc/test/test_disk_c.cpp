@@ -239,9 +239,16 @@ int main(void)
     /* DSKSYN (§B7) : levé au passage des syncs, sans DMA ; 11 secteurs = 11 paires de 4489, au
        plus une interruption par ligne -> entre 11 et 22 par révolution */
     adkcon = 0; s_regs[0x07E >> 1] = 0x4489;
-    seek_time(0, 0); s_dsksyn = 0;
+    seek_time(0, 0);
+    for (int i = 0; i < 300; i++) disk_line_tick();   /* tête stabilisée (240 lignes) */
+    s_dsksyn = 0;
     for (int i = 0; i < 3119; i++) disk_line_tick();
     CHECK(s_dsksyn >= 11 && s_dsksyn <= 22);
+    s_cyl = 1;                                         /* pas : rien pendant la stabilisation */
+    s_dsksyn = 0; for (int i = 0; i < 239; i++) disk_line_tick();
+    CHECK(s_dsksyn == 0);
+    s_cyl = 0;
+    for (int i = 0; i < 300; i++) disk_line_tick();
     adkcon = 0x0200;                                   /* MSBSYNC : inhibé */
     s_dsksyn = 0; for (int i = 0; i < 3119; i++) disk_line_tick();
     CHECK(s_dsksyn == 0);

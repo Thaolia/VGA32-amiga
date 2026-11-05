@@ -597,7 +597,10 @@ le code avant d'être retenu ; la plupart des analyses ne décrivent que l'OS.
 5. **CDANG OCS** : $000-$03E reste interdit au copper même avec COPCON bit 0 (custom-chips-v34 §5.8).
 6. **DSKSYN** (INTREQ bit 12, FLOPPY_SPEC B7) : levé dans `disk_line_tick` quand un mot égal à DSKSYNC
    passe sous la tête (lecteur sélectionné, moteur en marche, disque présent, hors MSBSYNC). Coût par
-   ligne quand le moteur tourne : 2 ou 3 comparaisons ; la piste MFM est construite au besoin.
+   ligne quand le moteur tourne : 2 ou 3 comparaisons. Rien pendant les 240 lignes (15 ms) qui suivent
+   un changement de piste (stabilisation de la tête, FLOPPY_SPEC D6) : sans ce délai, un seek moteur en
+   marche reconstruisait la piste MFM (≈ 12 Ko encodés bit à bit) à chaque pas, jusqu'à 6 fois par
+   trame ; la piste n'est reconstruite qu'une fois la tête arrivée.
 
 Tests (chacun échoue sur l'ancien code) : `testregs` (POTGOR bouton tenu, niveau 6, butée), `testblit`
 T8, `testcopper` (CDANG), `testdisk` (DSKSYN, cylindre 80). Toutes les sentinelles PC sont vertes ;
