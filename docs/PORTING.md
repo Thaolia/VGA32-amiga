@@ -695,6 +695,9 @@ DMAON, DISKWRITE).
   KickSlopStart v0.2.1 (voir la 3e passe ci-dessus).
 - `assets/kick_rom.h` local contenait encore KickStopStart v0.1 (CRC32 `886426AC`, chaîne
   `exec 34.2 (clean-room reimpl)`), pas le KS 1.3 officiel : les envs non-`kss` l'embarquent.
+  Régénéré le 2026-11-05 depuis KickSlopStart v0.2.26 (CRC32 `A267DD18`, même ROM que
+  `build/kss/`) : `python3 tools/make_kick_header.py build/kss/KickSlopStart.rom assets`. Les envs
+  non-`kss` embarquent donc la même ROM que les `-kss*` tant que le KS 1.3 officiel n'y est pas remis.
 
 ## Harnais PC : source unique (2026-10-07)
 
