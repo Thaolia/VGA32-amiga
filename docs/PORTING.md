@@ -660,9 +660,22 @@ DMAON, DISKWRITE).
   écran identique octet pour octet à celui d'avant la passe (commit 7d18e84).
 - HAL : `make -C tests/hal test` vert. Cible : `ttgo-vga32` et `ttgo-vga32-kss-kickonly` compilent
   sans warning.
-- **Non vérifié sur matériel** (carte non branchée pendant la session) : temps de trame après les
-  lots A (DSKSYN par ligne, moteur en marche) et C (sprites 4-7 désormais armés), clic droit dans le
-  Workbench, file souris, joystick.
+- **Carte (2026-11-05), A/B même carte, même ROM** (KickSlopStart v0.2.26 téléchargée par le build),
+  avant la passe = `7d18e84`, après = `3ce7af3`. Boot sans panic, `[FLASH]` 23,1 Mo/s, `PC=FC00D2` :
+
+  | Env, phase (moyenne du temps de calcul `=== frame`) | Avant | Après |
+  |---|---|---|
+  | `kss-kickonly`, écran de boot sans disque (trames 1050-4950) | 12,98 ms | 12,94 ms |
+  | `kss` (ADF de `assets/`), après le boot disque (trames 1050-5150) | 34,06 ms | 33,35 ms |
+  | heap interne libre | 134 456-134 472 o | 134 248 o |
+
+  Écarts dans le bruit de disposition du binaire (CLAUDE.md) ; heap −208 o (file souris, état DSKBYTR).
+  Avec l'ADF : 17 lectures de piste, dont les pistes 155-159 (cylindres 77-79), mêmes chiffres avant et
+  après. Les ~33 ms/trame de cette phase viennent de KickSlopStart (identiques avant la passe), pas de
+  la référence KS 1.3 (8,5 ms au repos), non reproductible : `assets/kick_rom.h` contient KickStopStart
+  v0.1. `ttgo-vga32-stress` non relancé (ni memory.cpp, ni cia.cpp, ni Musashi modifiés).
+- **Non vérifié sur matériel** : clic droit dans le Workbench, file de clics et joystick (à observer à
+  l'écran avec `remote_input.py`).
 
 ## KickSlopStart par défaut, image fusionnée, release par commit (2026-11-01)
 
